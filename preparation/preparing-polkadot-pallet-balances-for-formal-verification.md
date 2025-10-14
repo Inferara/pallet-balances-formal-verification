@@ -250,7 +250,7 @@ Given the complexity, we propose **incremental formalization** rather than attem
 - Model storage as a partial map `Storage: (Prefix × Key) ⇀ Value`
 - Prove storage operations in functions 28, 30, 52 maintain:
   - **Set-Get Round-trip**: `storage_set(k, v); storage_get(k) = Some(v)`
-  - **Key Isolation**: `k₁ ≠ k₂ → storage_set(k₁, v₁) ` doesn't affect `storage_get(k₂)`
+  - **Key Isolation**: `k₁ ≠ k₂ → storage_set(k₁, v₁) doesn't affect storage_get(k₂)`
 - Abstract away BLAKE2 hashing (assume collision-free)
 
 **Step 3: Core Balance Invariants**
