@@ -2,7 +2,6 @@
 name = "balances_contract"
 version = "0.1.0"
 authors = ["Inferara <info@inferara.com>"]
-# edition = "2021"
 edition = "2024"
 
 [dependencies]
