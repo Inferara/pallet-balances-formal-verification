@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         toolchain:
-          - stable
+          - nightly
     defaults:
       run:
         working-directory: balances_contract
@@ -42,7 +42,7 @@ jobs:
       - name: Check bitexact
         run: |
           cargo install cargo-contract --force --locked
-          cargo contract build --verifiable
+          cargo +nightly contract build --verifiable
           if cmp -s ./target/ink/balances_contract.wasm balances_contract.wasm; then
             echo "OK: Annotated module is bit-perfect to the original."
           else
