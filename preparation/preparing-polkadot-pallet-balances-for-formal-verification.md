@@ -16,7 +16,6 @@
     - [Expected Outcomes and Limitations](#expected-outcomes-and-limitations)
     - [Contract Infrastructure reasoning applicability comparison with the whole Polkadot runtime](#contract-infrastructure-reasoning-applicability-comparison-with-the-whole-polkadot-runtime)
   - [Conclusion](#conclusion)
-  - [References](#references)
 
 ## Introduction
 
@@ -324,5 +323,3 @@ However, **some challenges remain**:
 - Preservation mode logic is intricate with multiple interacting conditions
 
 A **phased approach** starting with infrastructure axiomatization, then core balance invariants, and finally end-to-end message safety offers the best balance between ambition and feasibility.
-
-## References
