@@ -35,7 +35,7 @@ jobs:
           sudo apt-get install -y wabt
           cargo install cargo-contract --force --locked
           wat2wasm balances_contract.wat
-          cargo contract build --release
+          cargo contract build
           if cmp -s ./target/ink/balances_contract.wasm balances_contract.wasm; then
             echo "OK: Annotated module is bit-perfect to the original."
           else
