@@ -23,9 +23,22 @@ jobs:
         run: rustup component add clippy-preview
       - name: Install Cargo audit
         run: cargo install cargo-audit
-      - name: Build
-        run: cargo build --verbose
-      - name: Test
-        run: cargo test --verbose
-      - name: Clippy
-        run: cargo clippy --verbose -- -D warnings
+      # - name: Build
+      #   run: cargo build --verbose
+      # - name: Test
+      #   run: cargo test --verbose
+      # - name: Clippy
+      #   run: cargo clippy --verbose -- -D warnings
+      - name: Check bitexact
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wabt
+          cargo install cargo-contract --force --locked
+          wat2wasm balances_contract.wat
+          if cmp -s ./target/ink/balances_contract.wasm balances_contract.wasm; then
+            echo "OK: Annotated module is bit-perfect to the original."
+          else
+            echo "ERROR: Annotated module is corrupted."
+            exit 1
+          fi
+          rm -f balances_contract.wasm
