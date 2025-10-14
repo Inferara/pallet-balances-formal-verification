@@ -29,12 +29,13 @@ jobs:
       #   run: cargo test --verbose
       # - name: Clippy
       #   run: cargo clippy --verbose -- -D warnings
+      - name: Install wabt
+        run: apt install -y wabt
+      - name: Build wasm from annotated module
+        run: wat2wasm balances_contract.wat
       - name: Check bitexact
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wabt
           cargo install cargo-contract --force --locked
-          wat2wasm balances_contract.wat
           cargo contract build
           if cmp -s ./target/ink/balances_contract.wasm balances_contract.wasm; then
             echo "OK: Annotated module is bit-perfect to the original."
