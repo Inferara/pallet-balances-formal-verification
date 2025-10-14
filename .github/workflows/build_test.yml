@@ -43,9 +43,8 @@ jobs:
         run: |
           cargo install cargo-contract --force --locked
           docker pull useink/contracts-verifiable:latest
-          cd ..
-          cargo +nightly contract build --verifiable
-          if cmp -s ./contract/target/ink/balances_contract.wasm ./contract/balances_contract.wasm; then
+          docker run -d --name ink-container --mount type=bind,source="$(pwd)",target="/contract" useink/contracts-verifiable
+          if cmp -s ./target/ink/balances_contract.wasm ./balances_contract.wasm; then
             echo "OK: Annotated module is bit-perfect to the original."
           else
             echo "ERROR: Annotated module is corrupted."
