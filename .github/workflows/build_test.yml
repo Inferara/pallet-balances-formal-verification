@@ -33,6 +33,8 @@ jobs:
         run: sudo apt install -y wabt
       - name: Build wasm from annotated module
         run: wat2wasm balances_contract.wat
+      - name: Setup Docker
+        uses: docker/setup-docker-action@v4
       - name: Check bitexact
         run: |
           cargo install cargo-contract --force --locked
