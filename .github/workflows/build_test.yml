@@ -39,11 +39,11 @@ jobs:
         run: wat2wasm balances_contract.wat
       - name: Setup Docker
         uses: docker/setup-docker-action@v4
-      - name: Check bitexact
+      - name: Build balances_contract
         run: |
           cargo install cargo-contract --force --locked
           docker pull useink/contracts-verifiable:latest
-          docker run -d --name ink-container --mount type=bind,source="$(pwd)",target="/contract" useink/contracts-verifiable
+          docker run --mount type=bind,source="$(pwd)",target="/contract" useink/contracts-verifiable build
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
