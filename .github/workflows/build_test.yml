@@ -30,7 +30,7 @@ jobs:
       # - name: Clippy
       #   run: cargo clippy --verbose -- -D warnings
       - name: Install wabt
-        run: apt install -y wabt
+        run: sudo apt install -y wabt
       - name: Build wasm from annotated module
         run: wat2wasm balances_contract.wat
       - name: Check bitexact
