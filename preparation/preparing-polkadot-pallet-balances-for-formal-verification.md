@@ -236,7 +236,9 @@ The current implementation (scattered across functions 70, 71, 76) handles dust 
 
 ## Roadmap for Incremental Verification
 
-Given the complexity, we propose **incremental formalization** rather than attempting to verify the entire contract at once:
+Given the complexity, we propose **incremental formalization** rather than attempting to verify the entire contract at once. Realistically, this endeavor can be approached in three phases:
+
+### Foundation Phase (Infrastructure Axiomatization)
 
 **Step 1: Codec Verification**
 - Prove round-trip properties for SCALE encoding/decoding of:
@@ -252,6 +254,8 @@ Given the complexity, we propose **incremental formalization** rather than attem
   - **Set-Get Round-trip**: `storage_set(k, v); storage_get(k) = Some(v)`
   - **Key Isolation**: `k₁ ≠ k₂ → storage_set(k₁, v₁) doesn't affect storage_get(k₂)`
 - Abstract away BLAKE2 hashing (assume collision-free)
+
+### Business Logic Phase (Functional Correctness)
 
 **Step 3: Core Balance Invariants**
 - Prove for `mint`, `burn_from`, `transfer`:
@@ -272,6 +276,8 @@ Given the complexity, we propose **incremental formalization** rather than attem
 - Show `set_lock` and `remove_lock` maintain this invariant
 - Verify that `usable_balance = free - frozen` is respected during withdrawals
 
+### Integration Phase
+
 **Step 5: End-to-End Message Safety**
 - Prove dispatch function 73 correctness:
   - All 35 selectors decode parameters correctly
@@ -280,6 +286,8 @@ Given the complexity, we propose **incremental formalization** rather than attem
 - Establish refinement relation between Wasm execution and high-level specification
 
 ### Expected Outcomes and Limitations
+
+**Preliminary Time Expenditure**: 2 months per phase, 6 month total
 
 **What Can Be Achieved**:
 - **High Assurance** for balance conservation, non-negativity, and overflow freedom under specified preconditions
