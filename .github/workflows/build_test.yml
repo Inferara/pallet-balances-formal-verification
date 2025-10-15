@@ -46,7 +46,9 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          path: target/ink/balances_contract.wasm
+          name: balances_contract-${{ github.run_number }}
+          path: balances_contract/target/ink/balances_contract.wasm
+          if-no-files-found: error
       - name: Verify bitexactness
         run: |
           if cmp -s ./target/ink/balances_contract.wasm ./balances_contract.wasm; then
