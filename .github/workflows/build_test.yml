@@ -43,6 +43,12 @@ jobs:
         run: |
           cargo install cargo-contract --force --locked
           cargo contract build --verifiable
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: balances_contract-${{ github.run_number }}
+          path: balances_contract/target/ink/polkadot_balances_contract_formal_verification.wasm
+          if-no-files-found: error
       - name: Verify bitexactness
         shell: bash
         run: |
@@ -76,9 +82,4 @@ jobs:
             echo "ERROR: Annotated module is corrupted (binary mismatch)."
             exit 1
           fi
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: balances_contract-${{ github.run_number }}
-          path: balances_contract/target/ink/polkadot_balances_contract_formal_verification.wasm
-          if-no-files-found: error
+
