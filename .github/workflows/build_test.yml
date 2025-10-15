@@ -46,7 +46,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          path: ./target/ink/balances_contract.wasm
+          path: target/ink/balances_contract.wasm
       - name: Verify bitexactness
         run: |
           if cmp -s ./target/ink/balances_contract.wasm ./balances_contract.wasm; then
