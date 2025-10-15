@@ -43,18 +43,42 @@ jobs:
         run: |
           cargo install cargo-contract --force --locked
           cargo contract build --verifiable
+      - name: Verify bitexactness
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILT="./target/ink/balances_contract.wasm"
+          ANNOTATED="./balances_contract.wasm"
+
+          echo "Checking for built wasm at: $BUILT"
+          if [[ ! -f "$BUILT" ]]; then
+            echo "ERROR: Built wasm not found at $BUILT"
+            echo "Directory listings for debugging:"
+            ls -lah ./target || true
+            ls -lah ./target/ink || true
+            exit 1
+          fi
+
+          echo "Checking for annotated wasm at: $ANNOTATED"
+          if [[ ! -f "$ANNOTATED" ]]; then
+            echo "ERROR: Annotated wasm not found at $ANNOTATED"
+            echo "Directory listing for debugging:"
+            ls -lah . || true
+            exit 1
+          fi
+
+          echo "Comparing '$BUILT' vs '$ANNOTATED'..."
+          if cmp -s "$BUILT" "$ANNOTATED"; then
+            echo "OK: Annotated module is bit-perfect to the original."
+            # Optional: clean up the annotated file after successful verification
+            rm -f "$ANNOTATED"
+          else
+            echo "ERROR: Annotated module is corrupted (binary mismatch)."
+            exit 1
+          fi
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: balances_contract-${{ github.run_number }}
           path: balances_contract/target/ink/balances_contract.wasm
           if-no-files-found: error
-      - name: Verify bitexactness
-        run: |
-          if cmp -s ./target/ink/balances_contract.wasm ./balances_contract.wasm; then
-            echo "OK: Annotated module is bit-perfect to the original."
-          else
-            echo "ERROR: Annotated module is corrupted."
-            exit 1
-          fi
-          rm -f balances_contract.wasm
