@@ -47,7 +47,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          BUILT="./target/ink/balances_contract.wasm"
+          BUILT="./target/ink/polkadot_balances_contract_formal_verification.wasm"
           ANNOTATED="./balances_contract.wasm"
 
           echo "Checking for built wasm at: $BUILT"
@@ -80,5 +80,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: balances_contract-${{ github.run_number }}
-          path: balances_contract/target/ink/balances_contract.wasm
+          path: balances_contract/target/ink/polkadot_balances_contract_formal_verification.wasm
           if-no-files-found: error
