@@ -42,8 +42,7 @@ jobs:
       - name: Build balances_contract
         run: |
           cargo install cargo-contract --force --locked
-          docker pull useink/contracts-verifiable:latest
-          docker run --mount type=bind,source="$(pwd)",target="/contract" useink/contracts-verifiable build
+          cargo contract build --verifiable
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
