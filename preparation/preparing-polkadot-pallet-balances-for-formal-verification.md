@@ -59,19 +59,19 @@ The annotated WebAssembly representation of `balances_contract` reveals a struct
 
 The disassembled Wasm module exhibits a clear three-tier architecture:
 
-**Infrastructure Layer (Functions 10-27, ~30% of code)**
+**Infrastructure Layer (~30% of code)**
 - Memory management primitives (`memcpy`, `memmove`, `memset`, `memcmp`)
 - SCALE codec operations (encoding/decoding of Rust types to byte representations)
 - Panic handlers and error reporting mechanisms
 - Allocation primitives (`alloc`, `vec_reserve`, etc.)
 
-**Host Interface Layer (Functions 28-65, ~40% of code)**
+**Host Interface Layer (~40% of code)**
 - Storage operations wrapping `seal_get_storage`, `seal_set_storage`, `seal_clear_storage`
 - Event emission via `seal_deposit_event`
 - Caller identification and value transfer handling
 - Cryptographic primitives (BLAKE2-256 hashing for storage keys)
 
-**Business Logic Layer (Functions 66-104, ~30% of code)**
+**Business Logic Layer (~30% of code)**
 - Message dispatchers (`dispatch_call`, `dispatch_deploy`)
 - Balance operations (`transfer`, `mint`, `burn_from`)
 - Account state management
@@ -82,13 +82,13 @@ The disassembled Wasm module exhibits a clear three-tier architecture:
 
 **Challenge 2.1: SCALE Codec Correctness**
 
-The SCALE codec, being the serialization format for all contract state and messages, is ubiquitous throughout the code. Key functions like `encode_u128` (func 33), `encode_compact_u32` (func 31), and their decoding counterparts appear in every storage operation. To verify balance operations, we need guarantees that:
+The SCALE codec, being the serialization format for all contract state and messages, is ubiquitous throughout the code. Key functions like `encode_u128`, `encode_compact_u32`, and their decoding counterparts appear in every storage operation. To verify balance operations, we need guarantees that:
 
 - **Encoding is deterministic and injective**: `∀x, y: encode(x) = encode(y) → x = y`
 - **Decode is left-inverse to encode**: `∀x: decode(encode(x)) = Some(x)`
 - **Encoding preserves value bounds**: `∀x: 0 ≤ x < 2^128 → length(encode(x)) = 16`
 
-The current implementation uses complex bit-shifting operations (visible in the massive selector dispatch in function 73) to reconstruct multi-byte values from unaligned memory loads. Verifying these operations requires reasoning about:
+The current implementation uses complex bit-shifting operations (visible in the massive selector dispatch) to reconstruct multi-byte values from unaligned memory loads. Verifying these operations requires reasoning about:
 - Byte-level memory layout
 - Endianness guarantees (little-endian for u128)
 - Overflow behavior during bit operations
@@ -97,7 +97,7 @@ The current implementation uses complex bit-shifting operations (visible in the 
 
 **Challenge 2.2: Storage Key Generation Non-Injectivity**
 
-The mapping from `AccountId → AccountData` uses BLAKE2-256 hashing (function 37) to derive storage keys:
+The mapping from `AccountId → AccountData` uses BLAKE2-256 hashing to derive storage keys:
 ```wasm
 storage_key = BLAKE2-256(mapping_prefix || account_id)
 ```
@@ -113,7 +113,7 @@ The hash function itself is implemented in the host environment (`seal_hash_blak
 
 **Challenge 2.3: Message Dispatch Complexity**
 
-Function 73 (`dispatch_call`) is a 1000+ line implementing selector matching through deeply nested blocks. The selector matching logic uses a multi-level cascade:
+Function `dispatch_call` is a 1000+ line implementing selector matching through deeply nested blocks. The selector matching logic uses a multi-level cascade:
 1. First-level dispatch on selector byte 0 (br_table with 9 cases)
 2. Second-level subtables for specific byte ranges (e.g., `0xC8`-`0xD0`, `0xF3`-`0xFA`)
 3. Individual 4-byte exact matches for remaining selectors
@@ -131,7 +131,7 @@ The core balance operations exhibit several patterns amenable to formal specific
 
 **Pattern 3.1: Checked Arithmetic with Overflow Handling**
 
-All balance updates use explicit overflow checking (e.g., in function 70, deposit_into_account):
+All balance updates use explicit overflow checking (e.g., in function `deposit_into_account`):
 ```wasm
 local.get 0          ;; account.free (low 64)
 local.get 2          ;; amount (low 64)
@@ -150,7 +150,7 @@ checked_add(a: u128, b: u128) → Result<u128> where
 
 **Pattern 3.2: Preservation Mode Enforcement**
 
-Functions like `transfer_with_checks` (71) implement complex logic for preservation modes:
+Functions like `transfer_with_checks` implement complex logic for preservation modes:
 ```
 if preservation = Preserve then
   new_balance ≥ existential_deposit ∨ new_balance = 0
@@ -163,7 +163,7 @@ This requires verification that:
 
 **Pattern 3.3: Lock Respect During Withdrawals**
 
-Function 71 ensures transfers respect frozen balances:
+Function `transfer_with_checks` ensures transfers respect frozen balances:
 ```
 usable_balance = account.free - account.frozen
 withdraw_amount ≤ usable_balance
@@ -175,7 +175,7 @@ This must be proven for all withdrawal paths (transfer, burn, etc.).
 
 Some specific sections of the provided WAT that present verification difficulties need to be highlighted:
 
-**Challenge 4.1: Complex Control Flow in Dispatch (Function 73)**
+**Challenge 4.1: Complex Control Flow in Dispatch**
 
 The dispatch function has 68 nested blocks and a `br_table` with 35+ cases. While this is semantically equivalent to a simple switch statement, proving its correctness requires:
 - Showing that all reachable branches decode parameters correctly
@@ -204,7 +204,7 @@ This reconstructs a little-endian u128 from two overlapping unaligned i64 loads.
   (bytes[11..19] as u64) << 56 | (bytes[19..27] as u64) >> 8
 ```
 
-**Challenge 4.2: Lock Aggregation Correctness (Functions 30, 73 handler 32)**
+**Challenge 4.2: Lock Aggregation Correctness**
 
 The `set_lock` implementation searches a vector for an existing lock ID, updates it, or appends a new entry. The maximum lock amount is then recalculated:
 ```wasm
@@ -217,9 +217,9 @@ Verifying this requires:
 2. Showing that `max` computation iterates over all locks
 3. Ensuring no lock is inadvertently dropped during vector operations
 
-The vector growth logic (function 56, `vec_reserve`) must preserve all existing elements.
+The vector growth logic (function `vec_reserve`) must preserve all existing elements.
 
-**Challenge 4.3: Dust Handling Soundness (Function 76, `check_deposit_feasibility`)**
+**Challenge 4.3: Dust Handling Soundness (Function `check_deposit_feasibility`)**
 
 The dust collection mechanism (transferring sub-ED balances to `dust_trap`) must maintain total issuance:
 ```
@@ -228,7 +228,7 @@ Post: total_issuance' = Σ(account'.free) + Σ(account'.reserved)
       ∨ (dust_trap.is_none() ∧ total_issuance' = total_issuance - dust_removed)
 ```
 
-The current implementation (scattered across functions 70, 71, 76) handles dust in multiple code paths. Verification requires:
+The current implementation (scattered across several functions) handles dust in multiple code paths. Verification requires:
 - Proving all paths correctly update `total_issuance`
 - Showing no double-counting or loss of tokens
 - Verifying `DustLost` events are emitted if and only if dust is burned
@@ -242,14 +242,14 @@ Given the complexity, we propose **incremental formalization** rather than attem
 **Step 1: Codec Verification**
 - Prove round-trip properties for SCALE encoding/decoding of:
   - `u32`, `u64`, `u128`
-  - `Compact<u32>` (function 31)
+  - `Compact<u32>`
   - `AccountId` (32-byte array)
   - `Option<T>`, `Result<T, E>`
 - **Goal**: Proven lemma `∀x: T. decode(encode(x)) = Some(x)` for each type
 
 **Step 2: Storage Abstraction**
 - Model storage as a partial map `Storage: (Prefix × Key) ⇀ Value`
-- Prove storage operations in functions 28, 30, 52 maintain:
+- Prove storage operations maintain:
   - **Set-Get Round-trip**: `storage_set(k, v); storage_get(k) = Some(v)`
   - **Key Isolation**: `k₁ ≠ k₂ → storage_set(k₁, v₁) doesn't affect storage_get(k₂)`
 - Abstract away BLAKE2 hashing (assume collision-free)
@@ -278,7 +278,7 @@ Given the complexity, we propose **incremental formalization** rather than attem
 ### Integration Phase
 
 **Step 5: End-to-End Message Safety**
-- Prove dispatch function 73 correctness:
+- Prove dispatch function correctness:
   - All 35 selectors decode parameters correctly
   - Invalid selectors return `Err` (not panic)
 - Verify panic-freedom under all valid inputs
