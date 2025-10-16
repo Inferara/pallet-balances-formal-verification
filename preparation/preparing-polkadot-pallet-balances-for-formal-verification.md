@@ -12,6 +12,9 @@
     - [3. Balance Operation Verification Strategy](#3-balance-operation-verification-strategy)
     - [4. Concrete Verification Challenges in the Annotated Code](#4-concrete-verification-challenges-in-the-annotated-code)
   - [Roadmap for Incremental Verification](#roadmap-for-incremental-verification)
+    - [Foundation Phase (Infrastructure Axiomatization)](#foundation-phase-infrastructure-axiomatization)
+    - [Business Logic Phase (Functional Correctness)](#business-logic-phase-functional-correctness)
+    - [Integration Phase](#integration-phase)
     - [Expected Outcomes and Limitations](#expected-outcomes-and-limitations)
     - [Contract Infrastructure reasoning applicability comparison with the whole Polkadot runtime](#contract-infrastructure-reasoning-applicability-comparison-with-the-whole-polkadot-runtime)
   - [Conclusion](#conclusion)
@@ -66,7 +69,7 @@ Source record of build json:
     }
 ```
 
-Binary was decompiled by `wasm2wat` and manually annotated. Bit-exactness of annotated module to the build atrifact was checked by comparing assembly output:
+Binary was decompiled by `wasm2wat` version `1.0.36` and manually annotated. Bit-exactness of annotated module to the build atrifact was checked by comparing assembly output:
 
 ```
 ~/Git/pallet-balances-formal-verification/balances_contract$ wat2wasm balances_contract.wat 
