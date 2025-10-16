@@ -45,6 +45,38 @@ Although this isolation method doesn't eliminate the problem of the module being
 
 ## Reproducibility guide
 
+Compilation of contract into `.wasm` was performed by `cargo contract build --verifiable` toolchain in the following environment:
+
+```
+Operating System: Kubuntu 25.04
+Kernel Version: 6.14.0-33-generic (64-bit)
+Processors: 16 × AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+Memory: 14.8 ГиБ of RAM
+Source record of build json:
+    "hash": "0x7130f80848d2f90872da6be9fdf595c4c222b6980eabe050fae953da53f90ea0",
+    "language": "ink! 5.1.1",
+    "compiler": "rustc 1.84.0",
+    "build_info": {
+      "build_mode": "Release",
+      "cargo_contract_version": "5.0.3",
+      "rust_toolchain": "stable-x86_64-unknown-linux-gnu",
+      "wasm_opt_settings": {
+        "keep_debug_symbols": false,
+        "optimization_passes": "Z"
+      }
+    }
+```
+
+Binary was decompiled by `wasm2wat` and manually annotated. Bit-exactness of annotated module to the build atrifact was checked by comparing assembly output:
+
+```
+~/Git/pallet-balances-formal-verification/balances_contract$ wat2wasm balances_contract.wat 
+~/Git/pallet-balances-formal-verification/balances_contract$ cmp balances_contract.wasm target/ink/polkadot_balances_contract_formal_verification.wasm 
+~/Git/pallet-balances-formal-verification/balances_contract$ rm balances_contract.wasm 
+```
+
+We have encountered some build reproducability problems, as on other machines `cargo contract build --verifiable` was producing semanticaly equal, but not bit-exact (discrepancy in order of functions in the module, and thus different indexes) artifacts. Though, such minor differences have no significant impact on the preliminary analysis of formal methods application.
+
 ### WASM binary compilation artifacts
 
 ### Textual description of fungible traits specification: public functions, involved in implementation of traits
