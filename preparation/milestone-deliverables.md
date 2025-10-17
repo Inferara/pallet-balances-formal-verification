@@ -1,7 +1,7 @@
 # Milestone Deliverables
 
 * Grants program submitted [PR](https://github.com/w3f/Grants-Program/pull/2606)
-* Grants milestone delivery repository [PR](#TODO)
+* Grants milestone delivery repository [PR](https://github.com/w3f/Grant-Milestone-Delivery/pull/1289)
 
 ## Deliverables Table
 
