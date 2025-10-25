@@ -936,6 +936,16 @@ mod balances_contract {
                 return Ok(());
             }
 
+            // Handle self-transfer as a no-op
+            if from == to {
+                self.env().emit_event(Transfer {
+                    from: Some(from),
+                    to: Some(to),
+                    value: amount,
+                });
+                return Ok(());
+            }
+
             let mut from_account = self.account(from);
             let mut to_account = self.account(to);
 
@@ -1174,6 +1184,8 @@ mod balances_contract {
         include!("conformance_tests\\regular_mutate.in.rs");
         #[cfg(windows)]
         include!("conformance_tests\\regular_unbalanced.in.rs");
+        #[cfg(windows)]
+        include!("conformance_tests\\additional_coverage.in.rs");
 
         #[cfg(not(windows))]
         include!("conformance_tests/inspect_mutate.in.rs");
@@ -1183,5 +1195,7 @@ mod balances_contract {
         include!("conformance_tests/regular_mutate.in.rs");
         #[cfg(not(windows))]
         include!("conformance_tests/regular_unbalanced.in.rs");
+        #[cfg(not(windows))]
+        include!("conformance_tests/additional_coverage.in.rs");
     }
 }
