@@ -344,66 +344,93 @@
     end
     unreachable)         ;; Panic on length mismatch
 
-  (func (;14;) (type 2) (param i32 i32 i32) (result i32)
-    (local i32)
+  ;; ============================================================================
+  ;; SCALE CODEC - BUFFER READING
+  ;; ============================================================================
+
+  ;; Function 14: Read bytes from SCALE decode buffer
+  ;; Consumes bytes from a decode cursor, checking bounds
+  ;; Used for: Decoding message parameters, storage values
+  ;; Parameters: (reader_state_ptr, output_ptr, bytes_to_read) -> success_flag
+  ;; Returns: 0 on success, 1 on buffer underflow
+  (func $scale_read_bytes (;14;) (type 2) (param i32 i32 i32) (result i32)
+    (local i32)          ;; Local 3: result flag
+    ;; Check if cursor has been advanced (special single-byte read mode)
     local.get 0
-    i32.load8_u offset=4
+    i32.load8_u offset=4 ;; Check advanced flag
     local.set 3
     local.get 0
     i32.const 0
-    i32.store8 offset=4
+    i32.store8 offset=4  ;; Clear flag
+    
     local.get 3
     i32.eqz
-    if  ;; label = @1
+    if  ;; label = @1 - Normal read path
       local.get 0
-      i32.load
-      local.get 1
-      local.get 2
-      call 15
+      i32.load           ;; Get reader struct pointer
+      local.get 1        ;; output_ptr
+      local.get 2        ;; bytes_to_read
+      call 15            ;; Perform bounded read
       return
     end
+    
+    ;; Single-byte cached read path
     local.get 1
     local.get 0
-    i32.load8_u offset=5
-    i32.store8
+    i32.load8_u offset=5 ;; Read cached byte
+    i32.store8           ;; Write to output
+    
     local.get 0
-    i32.load
+    i32.load             ;; Get reader struct
     local.get 1
     i32.const 1
-    i32.add
+    i32.add              ;; Advance output by 1
     local.get 2
     i32.const 1
-    i32.sub
-    call 15)
-  (func (;15;) (type 2) (param i32 i32 i32) (result i32)
-    (local i32 i32)
+    i32.sub              ;; Reduce requested by 1
+    call 15)             ;; Read remaining bytes
+
+  ;; Function 15: Core bounded buffer read operation
+  ;; Reads from buffer with bounds checking and cursor advancement
+  ;; Used by: All SCALE decoding operations
+  ;; Parameters: (reader_ptr, output_ptr, bytes_to_read) -> error_flag
+  ;; Returns: 0 on success, 1 on underflow
+  (func $bounded_buffer_read (;15;) (type 2) (param i32 i32 i32) (result i32)
+    (local i32 i32)      ;; Locals for remaining bytes and current pointer
+    
+    ;; Check if enough data remaining
     local.get 0
-    i32.load offset=4
+    i32.load offset=4    ;; reader.remaining
     local.tee 3
-    local.get 2
+    local.get 2          ;; bytes_to_read
     i32.lt_u
-    local.tee 4
+    local.tee 4          ;; underflow flag
     i32.eqz
-    if  ;; label = @1
-      local.get 1
-      local.get 2
+    if  ;; label = @1 - if remaining >= bytes_to_read
+      ;; Perform the copy
+      local.get 1        ;; dest
+      local.get 2        ;; expected_len
       local.get 0
-      i32.load
+      i32.load           ;; reader.ptr (src)
       local.tee 1
-      local.get 2
-      call 13
+      local.get 2        ;; actual_len (remaining)
+      call 13            ;; validate_exact_copy
+      
+      ;; Update reader state
       local.get 0
       local.get 3
       local.get 2
       i32.sub
-      i32.store offset=4
+      i32.store offset=4 ;; remaining -= bytes_to_read
       local.get 0
-      local.get 1
+      local.get 1        ;; old ptr
       local.get 2
       i32.add
-      i32.store
+      i32.store          ;; ptr += bytes_to_read
     end
-    local.get 4)
+    
+    local.get 4)         ;; return error flag
+
   (func (;16;) (type 0) (param i32 i32)
     (local i32 i32 i32 i32 i32 i32 i64)
     global.get 0
