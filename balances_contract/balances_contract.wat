@@ -14695,9 +14695,55 @@
     end
     i32.const 0)
 
+  ;; ============================================================================
+  ;; EXPORTS AND MODULE METADATA
+  ;; ============================================================================
+  
   (global (;0;) (mut i32) (i32.const 65536))
   (global (;1;) i32 (i32.const 82672))
   (global (;2;) i32 (i32.const 82665))
+  
   (export "call" (func 63))
   (export "deploy" (func 64))
-  (data (;0;) (i32.const 65536) "\ff\df\a2?\b4z}\fd\fc\01\01\00i\00\00\00\99\00\00\00.\00\00\00\fc\01\01\00i\00\00\00\94\00\00\000\00\00\00\01\b5\b6\1a>j!\a1k\e4\f0D\b5\17\c2\8a\c6\92I/s\c5\bf\d3\f6\01x\ad\98\c7g\f4\cb\01\d8>B\e4<_\bc\d3\1c\e6\a9[\13(F\12\acM\a9\1b)\17\d0\d5\bd\ad\be\ff\b6@\db\bc\01\b7~\08\8e\0f,r\a8\81+&\02M\5c\a3\014\9b3p\ce>\d5o\c3\eas3\b0\9c\0bR\01 \85\7f\1e\c4\a4\e9\8e\83\bb\ec\a3\e9\98\22\88WS1\07t\11\fe\d94\ea\0bCn\e3\deU\01\89\f3\e8\aa\18\97\bb\8d8\e2o=S\bdJ]\ae\06\bb\14\c9Lz@}\b5\1c\98\da{j\11\01\c5w\1e\b4zW\e5OXR\fb\b9\12\bc6hS\d8N9\ec\b1\95W\a0\b9\f0\ac\f4\18\f9\7f\01\d6\d3\1a\dew%%\df\03\80\07.\13\9d\03U>\d7m\c5[\18\f9\c8\0e\a6x\a2\8d\a28#\01\e6\c5\e2\a1\0d\92\bc\c1\87O\98\182\ab}K\e9\7f\09\b2\f8\e8\88ih~?}\c0\84\de\9b\01\8b\cf\93\86\9b\87\f1\f2s\91\ca\d4\09\a3\cd\d3\87\93\0c\ba\d3\07\f9\e1j\8df\00Ozb1\01A(&C\d6\e8\01\b1\b3\ed\0f1\f9\94b\c2\9b\e6\94\1c\fb\cdV;\d9UGG\f6%\a9+\10\01\02\03\04\05\06\07\08\09\0a\0b\0c\0d\0e/usr/local/cargo/registry/src/index.crates.io-6f17d22bba15001f/ink_env-5.1.1/src/engine/on_chain/buffer.rs\00\81\01\01\00j\00\00\00]\00\00\00\0e\00\00\00/usr/local/cargo/registry/src/index.crates.io-6f17d22bba15001f/ink_env-5.1.1/src/engine/on_chain/impls.rs/usr/local/cargo/registry/src/index.crates.io-6f17d22bba15001f/parity-scale-codec-3.7.5/src/codec.rs\00\00\00e\02\01\00d\00\00\00{\00\00\00\0e"))
+  
+  ;; ============================================================================
+  ;; STATIC DATA SECTION
+  ;; ============================================================================
+  
+  (data (;0;) (i32.const 65536)
+    ;; Mapping prefix and XOR key
+    "\ff\df\a2?\b4z}\fd"
+    
+    ;; Source file path references
+    "\fc\01\01\00i\00\00\00"    ;; buffer.rs path
+    "\99\00\00\00.\00\00\00"    ;; Line 153, column 46
+    
+    "\fc\01\01\00i\00\00\00"
+    "\94\00\00\000\00\00\00"    ;; Line 148, column 48
+    
+    ;; Cryptographic constants (SHA-256 initial values, etc.)
+    "\01\b5\b6\1a>j!\a1k\e4\f0D\b5\17\c2\8a\c6\92I/s\c5\bf\d3\f6\01x\ad\98\c7g\f4\cb"
+    "\01\d8>B\e4<_\bc\d3\1c\e6\a9[\13(F\12\acM\a9\1b)\17\d0\d5\bd\ad\be\ff\b6@\db\bc"
+    "\01\b7~\08\8e\0f,r\a8\81+&\02M\5c\a3\014\9b3p\ce>\d5o\c3\eas3\b0\9c\0bR"
+    "\01 \85\7f\1e\c4\a4\e9\8e\83\bb\ec\a3\e9\98\22\88WS1\07t\11\fe\d94\ea\0bCn\e3\deU"
+    "\01\89\f3\e8\aa\18\97\bb\8d8\e2o=S\bdJ]\ae\06\bb\14\c9Lz@}\b5\1c\98\da{j\11"
+    "\01\c5w\1e\b4zW\e5OXR\fb\b9\12\bc6hS\d8N9\ec\b1\95W\a0\b9\f0\ac\f4\18\f9\7f"
+    "\01\d6\d3\1a\dew%%\df\03\80\07.\13\9d\03U>\d7m\c5[\18\f9\c8\0e\a6x\a2\8d\a28#"
+    "\01\e6\c5\e2\a1\0d\92\bc\c1\87O\98\182\ab}K\e9\7f\09\b2\f8\e8\88ih~?}\c0\84\de\9b"
+    "\01\8b\cf\93\86\9b\87\f1\f2s\91\ca\d4\09\a3\cd\d3\87\93\0c\ba\d3\07\f9\e1j\8df\00Ozb1"
+    "\01A(&C\d6\e8\01\b1\b3\ed\0f1\f9\94b\c2\9b\e6\94\1c\fb\cdV;\d9UGG\f6%\a9+"
+    
+    ;; Selector dispatch table
+    "\10\01\02\03\04\05\06\07\08\09\0a\0b\0c\0d\0e"
+    
+    ;; Error messages and paths
+    "/usr/local/cargo/registry/src/index.crates.io-6f17d22bba15001f/ink_env-5.1.1/src/engine/on_chain/buffer.rs\00"
+    "\81\01\01\00j\00\00\00]\00\00\00\0e\00\00\00"
+    
+    "/usr/local/cargo/registry/src/index.crates.io-6f17d22bba15001f/ink_env-5.1.1/src/engine/on_chain/impls.rs"
+    "/usr/local/cargo/registry/src/index.crates.io-6f17d22bba15001f/parity-scale-codec-3.7.5/src/codec.rs\00"
+    
+    "\00\00e\02\01\00d\00\00\00"
+    "{\00\00\00\0e"
+  )
+)
