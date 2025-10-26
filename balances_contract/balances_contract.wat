@@ -431,13 +431,24 @@
     
     local.get 4)         ;; return error flag
 
-  (func (;16;) (type 0) (param i32 i32)
+  ;; ============================================================================
+  ;; SCALE ENCODING TO STORAGE
+  ;; ============================================================================
+
+  ;; Function 16: Encode and write Mapping<AccountId, Vec<BalanceLock>>
+  ;; Encodes a vector of balance locks and writes to storage
+  ;; Used for: Persisting account lock data in set_lock/remove_lock
+  ;; Parameters: (result_ptr, locks_vec_ptr) -> void
+  ;; Result: Stores encoded data info in result_ptr (ptr, len, capacity)
+  (func $encode_locks_to_storage (;16;) (type 0) (param i32 i32)
     (local i32 i32 i32 i32 i32 i32 i64)
     global.get 0
     i32.const 128
     i32.sub
-    local.tee 2
+    local.tee 2          ;; Allocate 128-byte stack frame
     global.set 0
+    
+    ;; Copy vector metadata to stack (locks are [BalanceLock; N])
     local.get 2
     i32.const 36
     i32.add
@@ -463,56 +474,69 @@
     i64.load align=1
     i64.store align=4
     local.get 2
-    i32.const 65536
+    i32.const 65536      ;; Storage key prefix for locks
     i32.store offset=24
     local.get 2
     local.get 1
     i64.load align=1
     i64.store offset=28 align=4
+    
+    ;; Initialize encoder buffer at offset 104
     local.get 2
-    i64.const 16384
+    i64.const 16384      ;; Buffer capacity
     i64.store offset=108 align=4
     local.get 2
-    i32.const 66280
+    i32.const 66280      ;; Buffer start
     i32.store offset=104
+    
+    ;; Encode the storage key
     local.get 2
     i32.const 24
     i32.add
     local.get 2
     i32.const 104
     i32.add
-    local.tee 5
-    call 17
+    local.tee 5          ;; Save encoder pointer
+    call 17              ;; encode_mapping_key
+    
     block  ;; label = @1
+      ;; Check encoder state (ptr should be >= used)
       local.get 2
-      i32.load offset=108
+      i32.load offset=108  ;; encoder.capacity (NOTE: field order!)
       local.tee 3
       local.get 2
-      i32.load offset=112
+      i32.load offset=112  ;; encoder.used
       local.tee 1
       i32.lt_u
-      br_if 0 (;@1;)
+      br_if 0 (;@1;)      ;; Exit if error
+      
       local.get 2
-      i32.load offset=104
+      i32.load offset=104  ;; encoder.ptr
       local.set 4
+      
+      ;; Update encoder state for next operation
       local.get 2
       local.get 3
       local.get 1
       i32.sub
-      local.tee 3
+      local.tee 3          ;; remaining = capacity - used
       i32.store offset=104
-      local.get 4
-      local.get 1
+      
+      ;; Call seal_get_storage to read current value
+      local.get 4          ;; key_ptr
+      local.get 1          ;; key_len
       local.get 1
       local.get 4
       i32.add
-      local.tee 4
-      local.get 5
-      call 0
+      local.tee 4          ;; value_ptr (reuse buffer after key)
+      local.get 5          ;; value_len_ptr
+      call 0               ;; seal_get_storage
       local.set 1
+      
+      ;; Validate storage operation
       local.get 3
       local.get 2
-      i32.load offset=104
+      i32.load offset=104  ;; Check updated value
       local.tee 3
       i32.lt_u
       local.get 1
@@ -520,46 +544,57 @@
       i32.ge_u
       i32.or
       br_if 0 (;@1;)
+      
+      ;; Process result code
       local.get 0
       block (result i64)  ;; label = @2
         local.get 1
-        i32.const 65906
+        i32.const 65906    ;; Result code lookup table
         i32.add
         i32.load8_u
         local.tee 1
         i32.const 3
         i32.eq
         if  ;; label = @3
+          ;; KeyNotFound case
           i32.const -2147483648
           local.set 1
-          i64.const 16
+          i64.const 16     ;; Default capacity
           br 1 (;@2;)
         end
+        
         local.get 1
         i32.const 16
         i32.ne
-        br_if 1 (;@1;)
+        br_if 1 (;@1;)    ;; Exit if not Success
+        
+        ;; Success: decode the value
         local.get 2
         local.get 3
         i32.store offset=64
         local.get 2
         local.get 4
         i32.store offset=60
+        
+        ;; Decode compact length prefix
         local.get 2
         i32.const 16
         i32.add
         local.get 2
         i32.const 60
         i32.add
-        call 18
+        call 18            ;; Read first byte
+        
         local.get 2
         i32.load8_u offset=16
         br_if 1 (;@1;)
+        
         block  ;; label = @3
           block  ;; label = @4
             block  ;; label = @5
               block  ;; label = @6
                 block  ;; label = @7
+                  ;; Decode compact encoding mode
                   local.get 2
                   i32.load8_u offset=17
                   local.tee 1
@@ -569,6 +604,7 @@
                   i32.sub
                   br_table 1 (;@6;) 2 (;@5;) 3 (;@4;) 0 (;@7;)
                 end
+                ;; Mode 3: single-byte direct encoding (0-63)
                 local.get 1
                 i32.const 252
                 i32.and
@@ -577,6 +613,7 @@
                 local.set 3
                 br 3 (;@3;)
               end
+              ;; Mode 0: two-byte encoding (64-16383)
               local.get 2
               local.get 1
               i32.store8 offset=109
@@ -612,6 +649,7 @@
               local.set 3
               br 2 (;@3;)
             end
+            ;; Mode 1: four-byte encoding (16384-1073741823)
             local.get 2
             local.get 1
             i32.store8 offset=109
@@ -647,6 +685,7 @@
             local.set 3
             br 1 (;@3;)
           end
+          ;; Mode 2: multi-byte encoding (>= 1073741824)
           local.get 1
           i32.const 4
           i32.ge_u
@@ -668,24 +707,29 @@
           i32.lt_u
           br_if 2 (;@1;)
         end
+        
+        ;; Initialize result vector for decoded locks
         i32.const 0
         local.set 1
         local.get 2
         i32.const 0
         i32.store offset=76
         local.get 2
-        i64.const 34359738368
+        i64.const 34359738368  ;; capacity = 8, ptr = 16
         i64.store offset=68 align=4
-        i32.const 682
+        i32.const 682        ;; Growth factor
         local.set 4
         local.get 2
         i32.const 120
         i32.add
         local.set 7
+        
+        ;; Main decode loop
         loop  ;; label = @3
           local.get 3
           if  ;; label = @4
             block  ;; label = @5
+              ;; Check if we need to grow the vector
               local.get 4
               local.get 3
               local.get 3
@@ -694,12 +738,14 @@
               select
               local.tee 4
               local.get 2
-              i32.load offset=68
+              i32.load offset=68  ;; vec.capacity
               local.tee 5
-              local.get 1
+              local.get 1            ;; vec.len
               i32.sub
               i32.le_u
               br_if 0 (;@5;)
+              
+              ;; Grow vector capacity
               local.get 1
               local.get 1
               local.get 4
@@ -707,6 +753,8 @@
               local.tee 1
               i32.gt_u
               br_if 4 (;@1;)
+              
+              ;; Calculate size in bytes (24 bytes per lock)
               local.get 1
               i64.extend_i32_u
               i64.const 24
@@ -716,12 +764,15 @@
               i64.shr_u
               i32.wrap_i64
               br_if 4 (;@1;)
+              
               local.get 8
               i32.wrap_i64
               local.tee 6
               i32.const 2147483640
               i32.gt_u
               br_if 4 (;@1;)
+              
+              ;; Prepare reallocation parameters
               local.get 2
               local.get 5
               if (result i32)  ;; label = @6
@@ -739,6 +790,8 @@
                 i32.const 0
               end
               i32.store offset=108
+              
+              ;; Reallocate
               local.get 2
               i32.const 80
               i32.add
@@ -747,6 +800,7 @@
               i32.const 104
               i32.add
               call 20
+              
               local.get 2
               i32.load offset=84
               local.set 5
@@ -754,6 +808,7 @@
               i32.load offset=80
               i32.eqz
               if  ;; label = @6
+                ;; Success
                 local.get 2
                 local.get 1
                 i32.store offset=68
@@ -762,17 +817,22 @@
                 i32.store offset=72
                 br 1 (;@5;)
               end
+              
+              ;; Allocation failure check
               local.get 5
               i32.const -2147483647
               i32.ne
               br_if 4 (;@1;)
             end
+            
+            ;; Decode one batch of locks
             local.get 4
             local.set 1
             loop  ;; label = @5
               local.get 1
               i32.eqz
               if  ;; label = @6
+                ;; Finished batch
                 local.get 3
                 local.get 4
                 i32.sub
@@ -783,6 +843,9 @@
                 local.set 4
                 br 3 (;@3;)
               end
+              
+              ;; Decode one BalanceLock
+              ;; Read lock.id (8 bytes)
               local.get 2
               i32.const 60
               i32.add
@@ -793,15 +856,21 @@
               local.tee 6
               call 21
               br_if 4 (;@1;)
+              
+              ;; Save lock.id
               local.get 2
               i64.load offset=104
               local.set 8
+              
+              ;; Read lock.amount (u128 = 16 bytes)
               local.get 6
               local.get 5
               call 22
               local.get 2
               i32.load offset=104
               br_if 4 (;@1;)
+              
+              ;; Copy decoded lock to temporary
               local.get 2
               local.get 2
               i64.load offset=112
@@ -813,6 +882,8 @@
               local.get 7
               i64.load
               i64.store offset=88
+              
+              ;; Append to vector
               local.get 1
               i32.const 1
               i32.sub
@@ -829,26 +900,34 @@
             unreachable
           end
         end
+        
+        ;; Validate final vector state
         local.get 2
         i32.load offset=68
         local.tee 1
         i32.const -2147483648
         i32.eq
         br_if 1 (;@1;)
+        
         local.get 2
-        i32.load offset=64
+        i32.load offset=64  ;; Check additional state
         local.get 1
         i32.const -2147483647
         i32.eq
         i32.or
         br_if 1 (;@1;)
+        
+        ;; Load final vector data
         local.get 2
         i64.load offset=72 align=4
       end
       i64.store offset=4 align=4
+      
+      ;; Store result (capacity in first field)
       local.get 0
       local.get 1
       i32.store
+      
       local.get 2
       i32.const 128
       i32.add
@@ -856,18 +935,29 @@
       return
     end
     unreachable)
-  (func (;17;) (type 0) (param i32 i32)
+
+  ;; Function 17: Encode storage key for Mapping
+  ;; Hashes the Mapping prefix + AccountId to generate storage key
+  ;; Used for: All Mapping operations (accounts, locks)
+  ;; Parameters: (key_data_ptr, encoder_ptr) -> void
+  (func $encode_mapping_key (;17;) (type 0) (param i32 i32)
     local.get 0
-    i32.load
+    i32.load             ;; Load Mapping prefix
     i32.load
     local.get 1
-    call 37
+    call 37              ;; Encode u32 prefix
     local.get 0
     i32.const 4
     i32.add
     local.get 1
-    call 31)
-  (func (;18;) (type 0) (param i32 i32)
+    call 31)             ;; Encode AccountId (32 bytes)
+
+  ;; Function 18: Decode Option-like discriminant byte
+  ;; Reads a single byte and returns it with EOF flag
+  ;; Used for: Option<T> decoding, enum discriminants
+  ;; Parameters: (result_ptr, reader_ptr) -> void
+  ;; Result: Stores (is_eof, value) at result_ptr
+  (func $decode_byte (;18;) (type 0) (param i32 i32)
     (local i32 i32)
     global.get 0
     i32.const 16
@@ -883,33 +973,43 @@
     i32.const 15
     i32.add
     i32.const 1
-    call 15
+    call 15              ;; Try to read 1 byte
     local.tee 1
-    if (result i32)  ;; label = @1
+    if (result i32)      ;; label = @1 - if failed (EOF)
       i32.const 0
     else
       local.get 2
       i32.load8_u offset=15
     end
-    i32.store8 offset=1
+    i32.store8 offset=1  ;; Store byte value
     local.get 0
     local.get 1
-    i32.store8
+    i32.store8           ;; Store EOF flag
     local.get 2
     i32.const 16
     i32.add
     global.set 0)
-  (func (;19;) (type 0) (param i32 i32)
+
+  ;; Function 19: Read 4-byte value from buffer
+  ;; Reads u32 from decode buffer
+  ;; Used for: Decoding length prefixes, discriminants
+  ;; Parameters: (result_ptr, reader_ptr) -> void
+  ;; Result: Stores (error_flag, value) at result_ptr
+  (func $decode_u32 (;19;) (type 0) (param i32 i32)
     (local i32 i32)
     global.get 0
     i32.const 16
     i32.sub
     local.tee 2
     global.set 0
+    
+    ;; Initialize output
     local.get 2
     i32.const 0
     i32.store offset=12
+    
     block  ;; label = @1
+      ;; Try to read 4 bytes
       local.get 1
       local.get 2
       i32.const 12
@@ -926,23 +1026,32 @@
       i32.const 1
       local.set 3
     end
+    
+    ;; Store result
     local.get 0
     local.get 1
     i32.store offset=4
     local.get 0
     local.get 3
     i32.store
+    
     local.get 2
     i32.const 16
     i32.add
     global.set 0)
-  (func (;20;) (type 1) (param i32 i32 i32)
+
+  ;; Function 20: Allocate or resize encoder buffer
+  ;; Grows the encoding buffer when more space needed
+  ;; Used for: Encoding large structures, vectors
+  ;; Parameters: (result_ptr, new_size, realloc_params_ptr) -> void
+  (func $encoder_buffer_resize (;20;) (type 1) (param i32 i32 i32)
     (local i32 i32 i32)
     global.get 0
     i32.const 16
     i32.sub
     local.tee 3
     global.set 0
+    
     block (result i32)  ;; label = @1
       local.get 2
       i32.load offset=4
@@ -952,6 +1061,7 @@
         local.tee 4
         i32.eqz
         if  ;; label = @3
+          ;; New allocation
           local.get 3
           i32.const 8
           i32.add
@@ -964,6 +1074,8 @@
           i32.load offset=12
           br 2 (;@1;)
         end
+        
+        ;; Reallocation
         local.get 2
         i32.load
         local.set 5
@@ -986,6 +1098,8 @@
         local.get 1
         br 1 (;@1;)
       end
+      
+      ;; Simple allocation
       local.get 3
       local.get 1
       call 67
@@ -996,6 +1110,8 @@
       i32.load offset=4
     end
     local.set 4
+    
+    ;; Store result
     local.get 0
     local.get 2
     i32.const 8
@@ -1012,25 +1128,39 @@
     local.get 2
     select
     i32.store offset=8
+    
     local.get 3
     i32.const 16
     i32.add
     global.set 0)
-  (func (;21;) (type 3) (param i32 i32) (result i32)
+
+  ;; Function 21: Read 8 bytes from buffer (for lock IDs)
+  ;; Reads fixed 8-byte value
+  ;; Parameters: (reader_ptr, output_ptr) -> error_flag
+  (func $read_8_bytes (;21;) (type 3) (param i32 i32) (result i32)
+    ;; Zero the output first
     local.get 1
     i64.const 0
     i64.store align=1
+    ;; Read 8 bytes
     local.get 0
     local.get 1
     i32.const 8
     call 15)
-  (func (;22;) (type 0) (param i32 i32)
+
+  ;; Function 22: Read 16 bytes (u128) from buffer
+  ;; Reads 128-bit value for Balance amounts
+  ;; Parameters: (result_ptr, reader_ptr) -> void
+  ;; Result: Stores error flag and u128 value
+  (func $decode_u128 (;22;) (type 0) (param i32 i32)
     (local i32 i32 i64)
     global.get 0
     i32.const 16
     i32.sub
     local.tee 2
     global.set 0
+    
+    ;; Initialize 16-byte buffer
     local.get 2
     i32.const 8
     i32.add
@@ -1040,13 +1170,16 @@
     local.get 2
     i64.const 0
     i64.store
+    
     block  ;; label = @1
+      ;; Read 16 bytes
       local.get 1
       local.get 2
       i32.const 16
       call 15
       i32.eqz
       if  ;; label = @2
+        ;; Success: copy to output
         local.get 0
         local.get 2
         i64.load
@@ -1060,27 +1193,38 @@
       i64.const 1
       local.set 4
     end
+    
     local.get 0
     local.get 4
     i64.store
+    
     local.get 2
     i32.const 16
     i32.add
     global.set 0)
-  (func (;23;) (type 0) (param i32 i32)
+
+  ;; Function 23: Push BalanceLock to vector
+  ;; Appends a 24-byte lock structure to locks vector
+  ;; Used for: set_lock when adding new lock entry
+  ;; Parameters: (vec_ptr, lock_struct_ptr) -> void
+  (func $vec_push_balance_lock (;23;) (type 0) (param i32 i32)
     (local i32 i32 i32 i32 i32 i64)
+    
+    ;; Check if vector needs to grow
     local.get 0
-    i32.load offset=8
+    i32.load offset=8    ;; vec.len
     local.tee 6
     local.get 0
-    i32.load
+    i32.load            ;; vec.capacity
     i32.eq
-    if  ;; label = @1
+    if  ;; label = @1 - if len == capacity
+      ;; Grow vector
       global.get 0
       i32.const 32
       i32.sub
       local.tee 2
       global.set 0
+      
       block  ;; label = @2
         block  ;; label = @3
           local.get 0
@@ -1089,6 +1233,8 @@
           i32.const -1
           i32.eq
           br_if 0 (;@3;)
+          
+          ;; Calculate new capacity (double or +1)
           i32.const 4
           local.get 3
           i32.const 1
@@ -1116,12 +1262,14 @@
           i64.shr_u
           i32.wrap_i64
           br_if 0 (;@3;)
+          
           local.get 7
           i32.wrap_i64
           local.tee 5
           i32.const 2147483640
           i32.gt_u
           br_if 0 (;@3;)
+          
           local.get 2
           local.get 3
           if (result i32)  ;; label = @4
@@ -1139,6 +1287,7 @@
             i32.const 0
           end
           i32.store offset=24
+          
           local.get 2
           i32.const 8
           i32.add
@@ -1147,6 +1296,7 @@
           i32.const 20
           i32.add
           call 20
+          
           local.get 2
           i32.load offset=12
           local.set 3
@@ -1162,6 +1312,7 @@
             i32.store offset=4
             br 2 (;@2;)
           end
+          
           local.get 3
           i32.const -2147483647
           i32.eq
@@ -1169,21 +1320,25 @@
         end
         unreachable
       end
+      
       local.get 2
       i32.const 32
       i32.add
       global.set 0
     end
+    
+    ;; Append lock to vector (copy 24 bytes)
     local.get 0
     local.get 6
     i32.const 1
     i32.add
-    i32.store offset=8
+    i32.store offset=8   ;; len++
+    
     local.get 0
-    i32.load offset=4
+    i32.load offset=4    ;; vec.ptr
     local.get 6
     i32.const 24
-    i32.mul
+    i32.mul              ;; offset = index * 24
     i32.add
     local.tee 0
     local.get 1
@@ -1205,13 +1360,20 @@
     i32.add
     i64.load
     i64.store)
-  (func (;24;) (type 1) (param i32 i32 i32)
+
+  ;; Function 24: Write Vec<BalanceLock> to storage
+  ;; Encodes a vector of locks and persists to storage key
+  ;; Used for: set_lock, remove_lock when updating account locks
+  ;; Parameters: (account_id_ptr, locks_vec_ptr, vec_len) -> void
+  (func $write_locks_to_storage (;24;) (type 1) (param i32 i32 i32)
     (local i32 i32 i32 i32)
     global.get 0
     i32.const 48
     i32.sub
     local.tee 3
     global.set 0
+    
+    ;; Copy AccountId to build storage key
     local.get 3
     i32.const 12
     i32.add
@@ -1237,24 +1399,29 @@
     i64.load align=1
     i64.store align=4
     local.get 3
-    i32.const 65536
+    i32.const 65536      ;; Locks mapping prefix
     i32.store
     local.get 3
     local.get 0
     i64.load align=1
     i64.store offset=4 align=4
+    
+    ;; Initialize encoder
     local.get 3
     i64.const 16384
     i64.store offset=40 align=4
     local.get 3
     i32.const 66280
     i32.store offset=36
+    
+    ;; Encode storage key
     local.get 3
     local.get 3
     i32.const 36
     i32.add
     local.tee 6
     call 17
+    
     block  ;; label = @1
       local.get 3
       i32.load offset=40
@@ -1264,6 +1431,7 @@
       local.tee 4
       i32.lt_u
       br_if 0 (;@1;)
+      
       local.get 3
       i32.load offset=36
       local.set 5
@@ -1280,9 +1448,13 @@
       local.get 5
       i32.add
       i32.store offset=36
+      
+      ;; Encode vector length
       local.get 2
       local.get 6
       call 25
+      
+      ;; Encode each lock (loop)
       local.get 2
       i32.const 24
       i32.mul
@@ -1290,6 +1462,7 @@
       loop  ;; label = @2
         local.get 0
         if  ;; label = @3
+          ;; Encode lock.id (8 bytes)
           local.get 3
           i32.const 36
           i32.add
@@ -1299,6 +1472,8 @@
           i32.add
           i32.const 8
           call 26
+          
+          ;; Encode lock.amount (u128)
           local.get 1
           i64.load
           local.get 1
@@ -1307,6 +1482,7 @@
           i64.load
           local.get 2
           call 27
+          
           local.get 0
           i32.const 24
           i32.sub
@@ -1318,6 +1494,8 @@
           br 1 (;@2;)
         end
       end
+      
+      ;; Write to storage
       local.get 3
       i32.load offset=44
       local.tee 0
@@ -1325,6 +1503,7 @@
       i32.load offset=40
       i32.gt_u
       br_if 0 (;@1;)
+      
       local.get 5
       local.get 4
       local.get 3
@@ -1332,6 +1511,7 @@
       local.get 0
       call 3
       drop
+      
       local.get 3
       i32.const 48
       i32.add
@@ -1339,6 +1519,7 @@
       return
     end
     unreachable)
+
   (func (;25;) (type 0) (param i32 i32)
     (local i32)
     global.get 0
