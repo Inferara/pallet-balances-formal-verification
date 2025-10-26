@@ -1093,3 +1093,97 @@ fn burn_preservation_before_dust() {
     assert_eq!(result, Err(Error::Expendability));
     assert_eq!(contract.balance(account), contract.existential_deposit() + 2);
 }
+
+/// Test resolve_credit with non-zero credit
+#[ink::test]
+fn resolve_credit_nonzero() {
+    let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
+    test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
+    let mut contract = new_contract(10, 5, None);
+    
+    let account = accounts.bob;
+    
+    // Create a credit imbalance
+    let credit = CreditImbalance { amount: 50 };
+    
+    // Resolve it - this should mint tokens (line 374)
+    contract.resolve_credit(account, credit).unwrap();
+    
+    assert_eq!(contract.balance(account), 50);
+    assert_eq!(contract.total_issuance(), 50);
+}
+
+/// Test write_balance increasing from non-zero to below ED (creates dust)
+#[ink::test]
+fn write_balance_increase_to_dust() {
+    let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
+    test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
+    let mut contract = new_contract(10, 5, None);
+    
+    if contract.existential_deposit() < 3 {
+        return Ok(());
+    }
+    
+    let account = accounts.bob;
+    // Start with a valid balance (above ED)
+    contract.mint(account, contract.existential_deposit() + 5).unwrap();
+    let initial_issuance = contract.total_issuance();
+    
+    // Use write_balance to set to below ED (but > 0) - should create dust (line 516)
+    let new_amount = contract.existential_deposit() - 2;
+    let dust = contract.write_balance(account, new_amount).unwrap();
+    
+    // Should return the dust amount and reap the account
+    assert_eq!(dust, Some(new_amount));
+    assert_eq!(contract.balance(account), 0);
+    
+    // Total issuance should be reduced (the dust is removed)
+    assert!(contract.total_issuance() < initial_issuance);
+}
+
+/// Test increase_balance normal path after overflow checks
+#[ink::test]
+fn increase_balance_normal_path() {
+    let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
+    test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
+    let mut contract = new_contract(10, 5, None);
+    
+    let account = accounts.bob;
+    contract.mint(account, 50).unwrap();
+    
+    // Normal increase that passes all checks (line 549)
+    let result = contract.increase_balance(account, 30, Precision::Exact).unwrap();
+    
+    assert_eq!(result, 30);
+    assert_eq!(contract.balance(account), 80);
+}
+
+/// Test burn_from with Preserve creating dust error
+#[ink::test]
+fn burn_preserve_creates_dust_error() {
+    let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
+    test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
+    let mut contract = new_contract(10, 5, None);
+    
+    if contract.existential_deposit() < 3 {
+        return Ok(());
+    }
+    
+    let account = accounts.bob;
+    let initial_balance = contract.existential_deposit() + 2;
+    contract.mint(account, initial_balance).unwrap();
+    
+    // Burn amount that leaves 1 token (dust) with Preserve (line 621)
+    let burn_amount = initial_balance - 1;
+    let result = contract.burn_from(
+        account,
+        burn_amount,
+        Preservation::Preserve,
+        Precision::Exact,
+        Fortitude::Polite,
+    );
+    
+    // Should hit the Preserve/Protect dust error
+    assert_eq!(result, Err(Error::Expendability));
+    assert_eq!(contract.balance(account), initial_balance);
+}
