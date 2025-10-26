@@ -616,7 +616,7 @@ mod balances_contract {
                 };
             }
 
-            account.free = new_balance; // TODO: UNCOVERED
+            account.free = new_balance;
             self.total_issuance = self.total_issuance.saturating_add(amount);
             self.active_issuance = self.active_issuance.saturating_add(amount);
             self.accounts.insert(who, &account);
