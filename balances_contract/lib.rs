@@ -473,7 +473,7 @@ mod balances_contract {
 
             let new_balance = match account.free.checked_sub(amount) {
                 Some(b) => b,
-                None => return WithdrawConsequence::BalanceLow, // TODO: UNCOVERED
+                None => return WithdrawConsequence::BalanceLow,
             };
 
             if new_balance < self.existential_deposit && new_balance > 0 {
@@ -514,7 +514,7 @@ mod balances_contract {
                         .active_issuance
                         .saturating_sub(old_balance.saturating_sub(amount));
                 } else {
-                    let diff = amount.saturating_sub(old_balance); // TODO: UNCOVERED
+                    let diff = amount.saturating_sub(old_balance);
                     self.total_issuance = self.total_issuance.saturating_add(diff);
                     self.active_issuance = self.active_issuance.saturating_add(diff);
                 }
@@ -604,7 +604,7 @@ mod balances_contract {
             // Check total issuance overflow
             if self.total_issuance.checked_add(amount).is_none() {
                 return match precision {
-                    Precision::Exact => Err(Error::Overflow), // TODO: UNCOVERED
+                    Precision::Exact => Err(Error::Overflow),
                     Precision::BestEffort => {
                         let actual = Balance::MAX.saturating_sub(self.total_issuance);
                         account.free = account.free.saturating_add(actual);
@@ -763,7 +763,7 @@ mod balances_contract {
             };
 
             if actual_burn == 0 {
-                return Ok(0); // TODO: UNCOVERED
+                return Ok(0);
             }
 
             // Check if the burn would violate preservation BEFORE doing it
@@ -778,7 +778,7 @@ mod balances_contract {
                         // Will handle dust after burn
                     }
                     Preservation::Preserve | Preservation::Protect => {
-                        return Err(Error::Expendability); // TODO: UNCOVERED
+                        return Err(Error::Expendability);
                     }
                 }
             }
@@ -986,7 +986,7 @@ mod balances_contract {
                     }
                     Preservation::Preserve | Preservation::Protect => {
                         // This shouldn't happen due to earlier check, but be safe
-                        return Err(Error::Expendability); // TODO: UNCOVERED
+                        return Err(Error::Expendability);
                     }
                 }
             }
