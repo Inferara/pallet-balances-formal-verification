@@ -473,7 +473,7 @@ mod balances_contract {
 
             let new_balance = match account.free.checked_sub(amount) {
                 Some(b) => b,
-                None => return WithdrawConsequence::BalanceLow,
+                None => return WithdrawConsequence::BalanceLow, // TODO: UNCOVERED
             };
 
             if new_balance < self.existential_deposit && new_balance > 0 {
@@ -778,7 +778,7 @@ mod balances_contract {
                         // Will handle dust after burn
                     }
                     Preservation::Preserve | Preservation::Protect => {
-                        return Err(Error::Expendability);
+                        return Err(Error::Expendability); // TODO: UNCOVERED
                     }
                 }
             }
@@ -986,7 +986,7 @@ mod balances_contract {
                     }
                     Preservation::Preserve | Preservation::Protect => {
                         // This shouldn't happen due to earlier check, but be safe
-                        return Err(Error::Expendability);
+                        return Err(Error::Expendability); // TODO: UNCOVERED
                     }
                 }
             }
