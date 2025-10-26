@@ -1,31 +1,157 @@
 (module
-  (type (;0;) (func (param i32 i32)))
-  (type (;1;) (func (param i32 i32 i32)))
-  (type (;2;) (func (param i32 i32 i32) (result i32)))
-  (type (;3;) (func (param i32 i32) (result i32)))
-  (type (;4;) (func (param i32)))
-  (type (;5;) (func))
-  (type (;6;) (func (param i32) (result i32)))
-  (type (;7;) (func (param i32 i32 i32 i32) (result i32)))
-  (type (;8;) (func (param i32 i32 i32 i32)))
-  (type (;9;) (func (param i64 i64 i32)))
-  (type (;10;) (func (result i32)))
-  (type (;11;) (func (param i32 i64 i64 i32 i32)))
-  (type (;12;) (func (param i64 i64)))
-  (type (;13;) (func (param i32 i32 i64 i64) (result i32)))
-  (type (;14;) (func (param i32 i32 i32 i64 i64 i32 i32)))
-  (type (;15;) (func (param i32 i32 i32 i64 i64 i32) (result i32)))
-  (type (;16;) (func (param i32 i64 i64 i32)))
-  (import "seal1" "get_storage" (func (;0;) (type 7)))
-  (import "seal0" "input" (func (;1;) (type 0)))
-  (import "seal0" "deposit_event" (func (;2;) (type 8)))
-  (import "seal2" "set_storage" (func (;3;) (type 7)))
-  (import "seal1" "clear_storage" (func (;4;) (type 3)))
-  (import "seal0" "seal_return" (func (;5;) (type 1)))
-  (import "seal0" "caller" (func (;6;) (type 0)))
-  (import "seal0" "value_transferred" (func (;7;) (type 0)))
-  (import "seal0" "hash_blake2_256" (func (;8;) (type 1)))
+  ;; ============================================================================
+  ;; TYPE DEFINITIONS
+  ;; ============================================================================
+
+  ;; Type 0: Binary procedure (no return)
+  ;; Used for: SCALE codec operations, memory copies, event emission setup
+  ;; Parameters: (dest_ptr, src_ptr) -> void
+  (type $type_binary_proc (;0;) (func (param i32 i32)))
+  
+  ;; Type 1: 3-parameter procedure (no return)
+  ;; Used for: memory operations (fill/copy), hashing, error handling
+  ;; Parameters: (dest, src, length) -> void
+  (type $type_ternary_proc (;1;) (func (param i32 i32 i32)))
+  
+  ;; Type 2: Generic 3-parameter function returning i32
+  ;; Used for: comparisons, memory operations, encoding/decoding operations
+  ;; Parameters: (pointer/value, pointer/value, length/value) -> result/status
+  (type $type_generic_3param_ret_i32 (;2;) (func (param i32 i32 i32) (result i32)))
+  
+  ;; Type 3: Binary function with i32 result
+  ;; Used for: trait method implementations, equality checks, formatting operations
+  ;; Parameters: (self_ptr, other_ptr) -> bool/status
+  (type $type_binary_op_ret_i32 (;3;) (func (param i32 i32) (result i32)))
+  
+  ;; Type 4: Single parameter procedure
+  ;; Used for: cleanup operations, panic handlers, initialization
+  ;; Parameters: (ptr/value) -> void
+  (type $type_unary_proc (;4;) (func (param i32)))
+  
+  ;; Type 5: Nullary procedure (no params, no return)
+  ;; Used for: module initialization, empty handlers, finalization
+  ;; Parameters: () -> void
+  (type $type_nullary_proc (;5;) (func))
+  
+  ;; Type 6: Unary function with result
+  ;; Used for: balance queries, type conversions, option unwrapping
+  ;; Parameters: (value/ptr) -> result
+  (type $type_unary_func_ret_i32 (;6;) (func (param i32) (result i32)))
+  
+  ;; Type 7: Storage operation with result
+  ;; Used for: seal_get_storage, seal_set_storage, seal_clear_storage
+  ;; Parameters: (key_ptr, key_len, value_ptr, value_len) -> status_code
+  (type $type_storage_op_ret_i32 (;7;) (func (param i32 i32 i32 i32) (result i32)))
+  
+  ;; Type 8: 4-parameter procedure
+  ;; Used for: seal_deposit_event, complex memory operations
+  ;; Parameters: (ptr1, ptr2, len1, len2) -> void
+  (type $type_quad_proc (;8;) (func (param i32 i32 i32 i32)))
+  
+  ;; Type 9: 128-bit value operation
+  ;; Used for: Balance (u128) encoding, storage key generation
+  ;; Parameters: (value_low_64, value_high_64, output_ptr) -> void
+  (type $type_u128_operation (;9;) (func (param i64 i64 i32)))
+  
+  ;; Type 10: Nullary function with result
+  ;; Used for: getters (total_issuance, active_issuance), status queries
+  ;; Parameters: () -> value
+  (type $type_nullary_func_ret_i32 (;10;) (func (result i32)))
+  
+  ;; Type 11: Complex balance operation
+  ;; Used for: deposit/withdrawal with imbalances, multi-balance updates
+  ;; Parameters: (account_ptr, amount_low, amount_high, flags, extra_ptr) -> void
+  (type $type_balance_complex_op (;11;) (func (param i32 i64 i64 i32 i32)))
+  
+  ;; Type 12: 128-bit binary operation
+  ;; Used for: u128 arithmetic (addition/subtraction), balance updates
+  ;; Parameters: (value1_low, value1_high) -> void
+  (type $type_u128_binary_op (;12;) (func (param i64 i64)))
+  
+  ;; Type 13: Transfer/withdrawal with 128-bit amounts
+  ;; Used for: transfer operations, can_withdraw checks
+  ;; Parameters: (account_ptr, flags, amount_low, amount_high) -> status
+  (type $type_transfer_op_ret_i32 (;13;) (func (param i32 i32 i64 i64) (result i32)))
+  
+  ;; Type 14: Complex balance transfer
+  ;; Used for: transfer_with_preservation, burn_from with all parameters
+  ;; Parameters: (from_ptr, to_ptr, flags, amount_low, amount_high, preserve, precision) -> void
+  (type $type_transfer_complex (;14;) (func (param i32 i32 i32 i64 i64 i32 i32)))
+  
+  ;; Type 15: Transfer check with result
+  ;; Used for: can_deposit, can_withdraw with provenance tracking
+  ;; Parameters: (account_ptr, metadata, flags, amount_low, amount_high, mode) -> consequence
+  (type $type_transfer_check_ret_i32 (;15;) (func (param i32 i32 i32 i64 i64 i32) (result i32)))
+  
+  ;; Type 16: Balance update operation
+  ;; Used for: increase_balance, decrease_balance with precision/fortitude
+  ;; Parameters: (account_ptr, amount_low, amount_high, flags) -> void
+  (type $type_balance_update (;16;) (func (param i32 i64 i64 i32)))
+
+  ;; ============================================================================
+  ;; IMPORT DECLARATIONS
+  ;; ============================================================================
+
+  ;; Import 0: Get value from contract storage (seal1 version with result code)
+  ;; Returns: 0 on success, 1 if key not found, 2 on other errors
+  ;; Used for: Reading AccountData, locks, and other persistent state
+  ;; Parameters: (key_ptr, key_len, out_ptr, out_len_ptr) -> status_code
+  (import "seal1" "get_storage" (func $seal_get_storage (;0;) (type 7)))
+  
+  ;; Import 1: Read the input data passed to the contract call
+  ;; Reads the SCALE-encoded input buffer into contract memory
+  ;; Used for: Decoding message selector and parameters
+  ;; Parameters: (buf_ptr, buf_len_ptr) -> void
+  (import "seal0" "input" (func $seal_input (;1;) (type 0)))
+  
+  ;; Import 2: Emit an event from the contract
+  ;; Writes event data to the host for indexing (Transfer, Endowed, etc.)
+  ;; Used for: Emitting all balance-related events
+  ;; Parameters: (topics_ptr, topics_len, data_ptr, data_len) -> void
+  (import "seal0" "deposit_event" (func $seal_deposit_event (;2;) (type 8)))
+  
+  ;; Import 3: Set/update a value in contract storage (seal2 version)
+  ;; Returns: 0 if new key, size of old value if updating
+  ;; Used for: Persisting AccountData, locks, and configuration
+  ;; Parameters: (key_ptr, key_len, value_ptr, value_len) -> old_value_size
+  (import "seal2" "set_storage" (func $seal_set_storage (;3;) (type 7)))
+  
+  ;; Import 4: Remove a key from contract storage (seal1 version)
+  ;; Returns: 0 if key didn't exist, size of removed value otherwise
+  ;; Used for: Cleaning up empty accounts, removing locks
+  ;; Parameters: (key_ptr, key_len) -> old_value_size
+  (import "seal1" "clear_storage" (func $seal_clear_storage (;4;) (type 3)))
+  
+  ;; Import 5: Return from contract execution with data
+  ;; Terminates execution and returns SCALE-encoded result to caller
+  ;; Used for: Returning query results and errors
+  ;; Parameters: (flags, data_ptr, data_len) -> never_returns
+  (import "seal0" "seal_return" (func $seal_return (;5;) (type 1)))
+  
+  ;; Import 6: Get the caller's AccountId
+  ;; Writes the 32-byte AccountId of the message sender
+  ;; Used for: Authentication, transfer source identification
+  ;; Parameters: (output_ptr, output_len_ptr) -> void
+  (import "seal0" "caller" (func $seal_caller (;6;) (type 0)))
+  
+  ;; Import 7: Get the value (balance) transferred with this call
+  ;; Writes the 128-bit balance value sent with the message
+  ;; Used for: Payable message handling
+  ;; Parameters: (output_ptr, output_len_ptr) -> void
+  (import "seal0" "value_transferred" (func $seal_value_transferred (;7;) (type 0)))
+  
+  ;; Import 8: Compute BLAKE2-256 hash
+  ;; Hashes input data using BLAKE2b-256 algorithm
+  ;; Used for: Generating storage keys for Mapping<K,V>
+  ;; Parameters: (input_ptr, input_len, output_ptr) -> void
+  (import "seal0" "hash_blake2_256" (func $seal_hash_blake2_256 (;8;) (type 1)))
+  
+  ;; Import 9: Linear memory shared between contract and host
+  ;; Initial: 2 pages (128 KiB), Maximum: 16 pages (1 MiB)
+  ;; Used for: All contract data, stack, heap allocations
+  ;; Layout: [stack | heap | static data]
   (import "env" "memory" (memory (;0;) 2 16))
+
   (func (;9;) (type 2) (param i32 i32 i32) (result i32)
     (local i32)
     loop (result i32)  ;; label = @1
