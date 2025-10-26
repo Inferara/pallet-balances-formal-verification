@@ -5108,7 +5108,14 @@
     global.set 0
     local.get 7)
 
-  (func (;63;) (type 5)
+  ;; ============================================================================
+  ;; MAIN CONTRACT DISPATCHER
+  ;; ============================================================================
+
+  ;; Function 63: Main contract call dispatcher
+  ;; Decodes input selector and routes to handler
+  ;; Parameters: () -> never
+  (func $dispatch_call (;63;) (type 5)
     (local i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i64 i64 i64 i64 i64 i64 i64 i64 i64 i64)
     global.get 0
     i32.const 528
@@ -13911,7 +13918,10 @@
     local.get 1
     call 55
     unreachable)
-  (func (;64;) (type 5)
+  ;; Function 64: Deploy dispatcher (constructor)
+  ;; Decodes constructor selector
+  ;; Parameters: () -> never
+  (func $dispatch_deploy (;64;) (type 5)
     (local i32 i32 i32 i32 i32 i32 i64 i64)
     global.get 0
     i32.const 304
@@ -14226,11 +14236,18 @@
     call 54
     call 51
     unreachable)
-  (func (;65;) (type 16) (param i32 i64 i64 i32)
+
+  ;; Function 65: Initialize contract state
+  ;; Sets up initial contract storage
+  ;; Parameters: (state_ptr, ed_low, ed_high, max_locks) -> void
+  (func $initialize_contract_state (;65;) (type 16) (param i32 i64 i64 i32)
+    ;; Get caller as owner
     local.get 0
     i32.const 48
     i32.add
     call 42
+    
+    ;; Store parameters
     local.get 0
     local.get 2
     i64.store offset=40
@@ -14261,13 +14278,19 @@
     local.get 0
     local.get 3
     i32.store offset=80)
-  (func (;66;) (type 2) (param i32 i32 i32) (result i32)
+
+  ;; Function 66: Check deposit feasibility
+  ;; Validates deposit operation
+  ;; Parameters: (config_ptr, account_ptr, new_balance_ptr) -> result
+  (func $check_deposit_feasibility (;66;) (type 2) (param i32 i32 i32) (result i32)
     (local i32 i32 i32 i32 i64 i64 i64 i64)
     global.get 0
     i32.const 80
     i32.sub
     local.tee 3
     global.set 0
+    
+    ;; Load new balance
     local.get 2
     i32.const 8
     i32.add
@@ -14544,7 +14567,11 @@
       return
     end
     unreachable)
-  (func (;67;) (type 0) (param i32 i32)
+
+  ;; Function 67: Allocate memory with alignment
+  ;; Low-level allocation wrapper
+  ;; Parameters: (result_ptr, size) -> void
+  (func $alloc_aligned (;67;) (type 0) (param i32 i32)
     (local i32)
     local.get 1
     if (result i32)  ;; label = @1
@@ -14557,14 +14584,20 @@
       i32.const 8
     end
     local.set 2
+    
     local.get 0
     local.get 1
     i32.store offset=4
     local.get 0
     local.get 2
     i32.store)
-  (func (;68;) (type 6) (param i32) (result i32)
+
+  ;; Function 68: Core allocation function
+  ;; Bump allocator implementation
+  ;; Parameters: (size) -> ptr
+  (func $alloc (;68;) (type 6) (param i32) (result i32)
     (local i32 i32)
+    
     block (result i32)  ;; label = @1
       i32.const 66268
       i32.load8_u
@@ -14573,6 +14606,7 @@
         i32.load
         br 1 (;@1;)
       end
+      
       memory.size
       local.set 1
       i32.const 66272
@@ -14589,6 +14623,7 @@
       i32.const 82672
     end
     local.set 1
+    
     block  ;; label = @1
       block (result i32)  ;; label = @2
         i32.const 0
@@ -14605,6 +14640,7 @@
         i32.lt_u
         br_if 0 (;@2;)
         drop
+        
         i32.const 66276
         i32.load
         local.get 2
@@ -14621,6 +14657,7 @@
           i32.const -1
           i32.eq
           br_if 2 (;@1;)
+          
           local.get 1
           i32.const 16
           i32.shl
@@ -14633,9 +14670,11 @@
           local.get 1
           i32.lt_u
           br_if 2 (;@1;)
+          
           i32.const 66276
           local.get 2
           i32.store
+          
           i32.const 0
           local.get 0
           local.get 1
@@ -14646,6 +14685,7 @@
           br_if 1 (;@2;)
           drop
         end
+        
         i32.const 66272
         local.get 2
         i32.store
@@ -14654,6 +14694,7 @@
       return
     end
     i32.const 0)
+
   (global (;0;) (mut i32) (i32.const 65536))
   (global (;1;) i32 (i32.const 82672))
   (global (;2;) i32 (i32.const 82665))
