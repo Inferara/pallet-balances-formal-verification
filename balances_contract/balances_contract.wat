@@ -1520,14 +1520,24 @@
     end
     unreachable)
 
-  (func (;25;) (type 0) (param i32 i32)
+  ;; ============================================================================
+  ;; SCALE ENCODING PRIMITIVES
+  ;; ============================================================================
+
+  ;; Function 25: Encode Compact<u32> (variable-length integer)
+  ;; SCALE compact encoding: 0-63 = 1 byte, 64-16383 = 2 bytes, etc.
+  ;; Used for: Vec lengths, enum discriminants
+  ;; Parameters: (value, encoder_ptr) -> void
+  (func $encode_compact_u32 (;25;) (type 0) (param i32 i32)
     (local i32)
     global.get 0
     i32.const 16
     i32.sub
     local.tee 2
     global.set 0
+    
     block  ;; label = @1
+      ;; Single-byte mode (0-63)
       local.get 0
       i32.const 63
       i32.le_u
@@ -1539,6 +1549,8 @@
         call 57
         br 1 (;@1;)
       end
+      
+      ;; Two-byte mode (64-16383)
       local.get 0
       i32.const 16383
       i32.le_u
@@ -1558,6 +1570,8 @@
         call 26
         br 1 (;@1;)
       end
+      
+      ;; Four-byte mode
       local.get 0
       i32.const 1073741823
       i32.le_u
@@ -1571,6 +1585,8 @@
         call 37
         br 1 (;@1;)
       end
+      
+      ;; Big-integer mode
       local.get 1
       i32.const 3
       call 57
@@ -1578,69 +1594,99 @@
       local.get 1
       call 37
     end
+    
     local.get 2
     i32.const 16
     i32.add
     global.set 0)
-  (func (;26;) (type 1) (param i32 i32 i32)
+
+  ;; Function 26: Write bytes to encoder buffer
+  ;; Appends raw bytes to the encoding buffer with bounds checking
+  ;; Used for: Encoding byte arrays, AccountIds, lock IDs
+  ;; Parameters: (encoder_ptr, data_ptr, data_len) -> void
+  (func $encoder_write_bytes (;26;) (type 1) (param i32 i32 i32)
     (local i32 i32)
+    
     block  ;; label = @1
+      ;; Calculate new position
       local.get 0
-      i32.load offset=8
+      i32.load offset=8    ;; encoder.used
       local.tee 3
-      local.get 2
+      local.get 2          ;; data_len
       i32.add
-      local.tee 4
+      local.tee 4          ;; new_used
       local.get 3
       i32.lt_u
-      br_if 0 (;@1;)
+      br_if 0 (;@1;)       ;; Overflow check
+      
       local.get 4
       local.get 0
-      i32.load offset=4
+      i32.load offset=4    ;; encoder.capacity
       i32.gt_u
-      br_if 0 (;@1;)
+      br_if 0 (;@1;)       ;; Capacity check
+      
+      ;; Copy data
       local.get 0
-      i32.load
+      i32.load             ;; encoder.ptr
       local.get 3
       i32.add
       local.get 2
       local.get 1
       local.get 2
-      call 13
+      call 13              ;; validate_exact_copy
+      
+      ;; Update used count
       local.get 0
       local.get 4
       i32.store offset=8
       return
     end
     unreachable)
-  (func (;27;) (type 9) (param i64 i64 i32)
+
+  ;; Function 27: Encode u128 (Balance) value
+  ;; Writes 128-bit integer in little-endian format (16 bytes)
+  ;; Used for: Encoding Balance fields
+  ;; Parameters: (value_low_64, value_high_64, encoder_ptr) -> void
+  (func $encode_u128 (;27;) (type 9) (param i64 i64 i32)
     (local i32)
     global.get 0
     i32.const 16
     i32.sub
     local.tee 3
     global.set 0
+    
+    ;; Store u128 on stack
     local.get 3
     local.get 1
     i64.store offset=8
     local.get 3
     local.get 0
     i64.store
+    
+    ;; Write 16 bytes
     local.get 2
     local.get 3
     i32.const 16
     call 26
+    
     local.get 3
     i32.const 16
     i32.add
     global.set 0)
-  (func (;28;) (type 0) (param i32 i32)
+
+  ;; Function 28: Write AccountData to storage
+  ;; Encodes account balance data and persists via seal_set_storage
+  ;; Used for: Updating account state after transfers, minting, burning
+  ;; Parameters: (account_id_ptr, account_data_ptr) -> void
+  (func $write_account_to_storage (;28;) (type 0) (param i32 i32)
     (local i32 i32 i32 i32)
     global.get 0
     i32.const 48
     i32.sub
     local.tee 2
     global.set 0
+    
+    ;; Build storage key
     local.get 2
     i32.const 12
     i32.add
@@ -1666,24 +1712,29 @@
     i64.load align=1
     i64.store align=4
     local.get 2
-    i32.const 65540
+    i32.const 65540      ;; Account mapping prefix
     i32.store
     local.get 2
     local.get 0
     i64.load align=1
     i64.store offset=4 align=4
+    
+    ;; Initialize encoder
     local.get 2
     i64.const 16384
     i64.store offset=40 align=4
     local.get 2
     i32.const 66280
     i32.store offset=36
+    
+    ;; Encode key
     local.get 2
     local.get 2
     i32.const 36
     i32.add
     local.tee 4
     call 17
+    
     block  ;; label = @1
       local.get 2
       i32.load offset=40
@@ -1693,6 +1744,7 @@
       local.tee 0
       i32.lt_u
       br_if 0 (;@1;)
+      
       local.get 2
       i32.load offset=36
       local.set 3
@@ -1709,9 +1761,13 @@
       local.get 3
       i32.add
       i32.store offset=36
+      
+      ;; Encode AccountData (3 × u128 = 48 bytes)
       local.get 1
       local.get 4
       call 29
+      
+      ;; Write to storage
       local.get 2
       i32.load offset=44
       local.tee 1
@@ -1719,6 +1775,7 @@
       i32.load offset=40
       i32.gt_u
       br_if 0 (;@1;)
+      
       local.get 3
       local.get 0
       local.get 2
@@ -1726,6 +1783,7 @@
       local.get 1
       call 3
       drop
+      
       local.get 2
       i32.const 48
       i32.add
@@ -1733,7 +1791,13 @@
       return
     end
     unreachable)
-  (func (;29;) (type 0) (param i32 i32)
+
+  ;; Function 29: Encode 3 u128 values (AccountData fields)
+  ;; Writes free, reserved, frozen balances to encoder
+  ;; Used for: AccountData encoding
+  ;; Parameters: (account_data_ptr, encoder_ptr) -> void
+  (func $encode_account_data (;29;) (type 0) (param i32 i32)
+    ;; Encode free balance
     local.get 0
     i64.load
     local.get 0
@@ -1742,6 +1806,8 @@
     i64.load
     local.get 1
     call 27
+    
+    ;; Encode reserved balance
     local.get 0
     i64.load offset=16
     local.get 0
@@ -1750,6 +1816,8 @@
     i64.load
     local.get 1
     call 27
+    
+    ;; Encode frozen balance
     local.get 0
     i64.load offset=32
     local.get 0
@@ -1758,83 +1826,110 @@
     i64.load
     local.get 1
     call 27)
-  (func (;30;) (type 0) (param i32 i32)
+
+  ;; Function 30: Encode event topic (AccountId) to encoder
+  ;; Encodes AccountId and hashes it to create event topic
+  ;; Used for: Event emission - creating indexed topics for Transfer, Endowed, etc.
+  ;; Parameters: (buffer_state_ptr, account_id_ptr) -> void
+  ;; Process: AccountId -> SCALE encode -> BLAKE2-256 hash -> append to buffer
+  (func $encode_event_topic (;30;) (type 0) (param i32 i32)
     (local i32 i32 i32 i32 i32)
     global.get 0
     i32.const 48
     i32.sub
-    local.tee 2
+    local.tee 2          ;; Local 2: stack frame
     global.set 0
+    
     block  ;; label = @1
+      ;; Extract remaining buffer space from encoder
       local.get 0
-      i32.load offset=4
+      i32.load offset=4    ;; buffer.capacity
       local.tee 4
       local.get 0
-      i32.load offset=8
+      i32.load offset=8    ;; buffer.used
       local.tee 3
       i32.lt_u
-      br_if 0 (;@1;)
+      br_if 0 (;@1;)      ;; Exit if used > capacity (error state)
+      
+      ;; Get buffer pointer
       local.get 0
-      i32.load
+      i32.load             ;; buffer.ptr
       local.set 5
+      
+      ;; Initialize temporary buffer state at offset 4
       local.get 2
       i32.const 0
-      i32.store offset=12
+      i32.store offset=12  ;; temp.used = 0
       local.get 2
       local.get 4
       local.get 3
       i32.sub
-      local.tee 4
-      i32.store offset=8
+      local.tee 4          ;; remaining = capacity - used
+      i32.store offset=8   ;; temp.capacity = remaining
       local.get 2
       local.get 3
       local.get 5
       i32.add
-      local.tee 5
+      local.tee 5          ;; temp.ptr = ptr + used
       i32.store offset=4
-      local.get 1
+      
+      ;; Encode the AccountId (32 bytes) into temporary buffer
+      local.get 1          ;; account_id_ptr
       local.get 2
       i32.const 4
       i32.add
-      local.tee 6
-      call 31
+      local.tee 6          ;; temp buffer state ptr
+      call 31              ;; encode_account_id
+      
+      ;; Check if encoding succeeded
       local.get 2
-      i32.load offset=12
+      i32.load offset=12   ;; bytes_written
       local.tee 1
       local.get 2
-      i32.load offset=8
+      i32.load offset=8    ;; capacity
       i32.gt_u
       br_if 0 (;@1;)
+      
+      ;; Hash the encoded AccountId to create 32-byte topic
       local.get 6
       local.get 2
-      i32.load offset=4
-      local.get 1
-      call 32
+      i32.load offset=4    ;; encoded data ptr
+      local.get 1          ;; encoded data len (should be 32)
+      call 32              ;; encode_storage_key_hash (BLAKE2-256)
+      
+      ;; Prepare to append hash to original encoder buffer
       local.get 2
       i32.const 0
-      i32.store offset=44
+      i32.store offset=44  ;; new temp.used = 0
       local.get 2
-      local.get 4
+      local.get 4          ;; remaining capacity
       i32.store offset=40
       local.get 2
-      local.get 5
+      local.get 5          ;; buffer position after first encoding
       i32.store offset=36
+      
+      ;; Write the 32-byte hash to original buffer
       local.get 6
       local.get 2
       i32.const 36
       i32.add
-      call 31
-      local.get 3
+      call 31              ;; Write hash (32 bytes)
+      
+      ;; Calculate new used count for original buffer
+      local.get 3          ;; old_used
       local.get 2
-      i32.load offset=44
+      i32.load offset=44   ;; bytes_written (should be 32)
       i32.add
-      local.tee 1
+      local.tee 1          ;; new_used
       local.get 3
       i32.lt_u
-      br_if 0 (;@1;)
+      br_if 0 (;@1;)      ;; Overflow check
+      
+      ;; Update original buffer's used count
       local.get 0
       local.get 1
-      i32.store offset=8
+      i32.store offset=8   ;; buffer.used = old_used + 32
+      
       local.get 2
       i32.const 48
       i32.add
@@ -1842,18 +1937,28 @@
       return
     end
     unreachable)
-  (func (;31;) (type 0) (param i32 i32)
+
+  ;; Function 31: Encode fixed 32-byte array (AccountId)
+  ;; Writes AccountId without length prefix
+  ;; Parameters: (account_id_ptr, encoder_ptr) -> void
+  (func $encode_account_id (;31;) (type 0) (param i32 i32)
     local.get 1
     local.get 0
     i32.const 32
     call 26)
-  (func (;32;) (type 1) (param i32 i32 i32)
+
+  ;; Function 32: Encode and hash value to storage key
+  ;; Creates deterministic storage key using BLAKE2-256
+  ;; Parameters: (encoder_ptr, key_data_ptr, key_len) -> void
+  (func $encode_storage_key_hash (;32;) (type 1) (param i32 i32 i32)
     (local i32)
     global.get 0
     i32.const -64
     i32.add
     local.tee 3
     global.set 0
+    
+    ;; Prepare hash output buffer
     local.get 3
     i32.const 24
     i32.add
@@ -1872,11 +1977,14 @@
     local.get 3
     i64.const 0
     i64.store
+    
     block  ;; label = @1
+      ;; If len >= 33, hash it
       local.get 2
       i32.const 33
       i32.ge_u
       if  ;; label = @2
+        ;; Hash the key
         local.get 3
         i32.const 56
         i32.add
@@ -1895,13 +2003,16 @@
         local.get 3
         i64.const 0
         i64.store offset=32
+        
         local.get 1
         local.get 2
         local.get 3
         i32.const 32
         i32.add
         local.tee 1
-        call 8
+        call 8           ;; seal_hash_blake2_256
+        
+        ;; Copy hash to output buffer
         local.get 3
         i32.const 32
         local.get 1
@@ -1909,12 +2020,16 @@
         call 13
         br 1 (;@1;)
       end
+      
+      ;; Direct copy if small enough
       local.get 3
       local.get 2
       local.get 1
       local.get 2
       call 13
     end
+    
+    ;; Write 32-byte result to encoder
     local.get 0
     local.get 3
     i64.load
@@ -1943,28 +2058,36 @@
     i32.add
     i64.load
     i64.store align=1
+    
     local.get 3
     i32.const -64
     i32.sub
     global.set 0)
-  (func (;33;) (type 4) (param i32)
+
+  ;; Function 33: Encode None variant for Option<T>
+  ;; Encodes discriminant byte and empty AccountId
+  ;; Used for: Encoding None variants in event emission
+  ;; Parameters: (encoder_ptr) -> void
+  (func $encode_option_none (;33;) (type 4) (param i32)
     (local i32 i32 i32 i32 i32 i32 i32)
     global.get 0
     i32.const 48
     i32.sub
     local.tee 1
     global.set 0
+    
     block  ;; label = @1
       local.get 0
-      i32.load offset=4
+      i32.load offset=4    ;; encoder.capacity
       local.tee 3
       local.get 0
-      i32.load offset=8
+      i32.load offset=8    ;; encoder.used
       local.tee 2
       i32.lt_u
       br_if 0 (;@1;)
+      
       local.get 0
-      i32.load
+      i32.load             ;; encoder.ptr
       local.set 4
       local.get 1
       i32.const 0
@@ -1981,6 +2104,8 @@
       i32.add
       local.tee 4
       i32.store offset=4
+      
+      ;; Write discriminant byte (0)
       local.get 1
       i32.const 0
       i32.store8 offset=36
@@ -1994,6 +2119,7 @@
       local.tee 6
       i32.const 1
       call 26
+      
       local.get 1
       i32.load offset=12
       local.tee 7
@@ -2001,11 +2127,14 @@
       i32.load offset=8
       i32.gt_u
       br_if 0 (;@1;)
+      
+      ;; Hash and encode empty AccountId
       local.get 5
       local.get 1
       i32.load offset=4
       local.get 7
       call 32
+      
       local.get 1
       i32.const 0
       i32.store offset=44
@@ -2015,9 +2144,11 @@
       local.get 1
       local.get 4
       i32.store offset=36
+      
       local.get 5
       local.get 6
       call 31
+      
       local.get 2
       local.get 2
       local.get 1
@@ -2026,9 +2157,11 @@
       local.tee 2
       i32.gt_u
       br_if 0 (;@1;)
+      
       local.get 0
       local.get 2
       i32.store offset=8
+      
       local.get 1
       i32.const 48
       i32.add
@@ -2036,54 +2169,69 @@
       return
     end
     unreachable)
-  (func (;34;) (type 0) (param i32 i32)
+
+  ;; Function 34: Encode Compact<u32> length prefix for vectors
+  ;; Wrapper around compact encoding specifically for Vec lengths
+  ;; Used for: Vec<BalanceLock>, Vec<Event> serialization
+  ;; Parameters: (vec_len, encoder_ptr) -> void
+  (func $encode_vec_length (;34;) (type 0) (param i32 i32)
     (local i32 i32 i32 i32)
     global.get 0
     i32.const 16
     i32.sub
     local.tee 2
     global.set 0
+    
     block  ;; label = @1
+      ;; Get current encoder position for bounds checking
       local.get 0
-      i32.load offset=4
+      i32.load offset=4    ;; encoder.capacity
       local.tee 4
       local.get 0
-      i32.load offset=8
+      i32.load offset=8    ;; encoder.used
       local.tee 3
       i32.lt_u
       br_if 0 (;@1;)
+      
+      ;; Save buffer state
       local.get 0
-      i32.load
+      i32.load             ;; encoder.ptr
       local.set 5
       local.get 2
       i32.const 0
-      i32.store offset=12
+      i32.store offset=12  ;; temp.used = 0
       local.get 2
       local.get 4
       local.get 3
       i32.sub
-      i32.store offset=8
+      i32.store offset=8   ;; temp.capacity = remaining
       local.get 2
       local.get 3
       local.get 5
       i32.add
-      i32.store offset=4
-      local.get 1
+      i32.store offset=4   ;; temp.ptr = ptr + used
+      
+      ;; Encode the length as Compact<u32>
+      local.get 1          ;; vec_len
       local.get 2
       i32.const 4
       i32.add
-      call 25
-      local.get 3
+      call 25              ;; encode_compact_u32
+      
+      ;; Update encoder used count
+      local.get 3          ;; old_used
       local.get 2
-      i32.load offset=12
+      i32.load offset=12   ;; bytes written by compact encoding
       i32.add
-      local.tee 1
+      local.tee 1          ;; new_used
       local.get 3
       i32.lt_u
-      br_if 0 (;@1;)
+      br_if 0 (;@1;)      ;; Overflow check
+      
       local.get 0
       local.get 1
-      i32.store offset=8
+      i32.store offset=8   ;; encoder.used = new_used
+      
       local.get 2
       i32.const 16
       i32.add
@@ -2091,13 +2239,21 @@
       return
     end
     unreachable)
-  (func (;35;) (type 0) (param i32 i32)
+
+  ;; Function 35: Read 32-byte AccountId from buffer
+  ;; Reads a fixed-size AccountId with success/EOF flag
+  ;; Used for: Decoding AccountId parameters in messages
+  ;; Parameters: (result_ptr, reader_ptr) -> void
+  ;; Result: Stores (success_flag, AccountId[32]) at result_ptr
+  (func $decode_account_id (;35;) (type 0) (param i32 i32)
     (local i32 i32 i32 i32)
     global.get 0
     i32.const 32
     i32.sub
     local.tee 2
     global.set 0
+    
+    ;; Initialize 32-byte buffer
     local.get 2
     i32.const 24
     i32.add
@@ -2119,6 +2275,8 @@
     local.get 2
     i64.const 0
     i64.store
+    
+    ;; Try to read 32 bytes
     local.get 0
     block (result i32)  ;; label = @1
       local.get 1
@@ -2127,6 +2285,7 @@
       call 15
       i32.eqz
       if  ;; label = @2
+        ;; Success: copy AccountId to result
         local.get 0
         local.get 2
         i64.load
@@ -2149,42 +2308,55 @@
         local.get 5
         i64.load
         i64.store align=1
-        i32.const 0
+        i32.const 0        ;; success flag
         br 1 (;@1;)
       end
-      i32.const 1
+      i32.const 1          ;; error/EOF flag
     end
-    i32.store8
+    i32.store8             ;; Store flag at offset 0
+    
     local.get 2
     i32.const 32
     i32.add
     global.set 0)
-  (func (;36;) (type 0) (param i32 i32)
+
+  ;; Function 36: Read and decode Option<AccountId> with full structure
+  ;; Decodes complex Option structure with nested data
+  ;; Used for: Decoding optional account parameters in complex messages
+  ;; Parameters: (result_ptr, reader_ptr) -> void
+  ;; Result: Stores complete decoded structure (56 bytes) at result_ptr
+  (func $decode_option_account_full (;36;) (type 0) (param i32 i32)
     (local i32)
     global.get 0
     i32.const -64
     i32.add
     local.tee 2
     global.set 0
+    
+    ;; Read AccountId (sets success flag at offset 7)
     local.get 2
     i32.const 7
     i32.add
     local.get 1
-    call 35
+    call 35              ;; decode_account_id
+    
     block  ;; label = @1
       local.get 2
-      i32.load8_u offset=7
+      i32.load8_u offset=7  ;; Check success flag
       i32.eqz
       if  ;; label = @2
+        ;; Read following u128 value
         local.get 2
         i32.const 40
         i32.add
         local.get 1
-        call 22
+        call 22            ;; decode_u128
+        
         local.get 2
         i32.load offset=40
         i32.eqz
         if  ;; label = @3
+          ;; Success: copy all decoded data to result
           local.get 0
           local.get 2
           i64.load offset=48
@@ -2195,7 +2367,7 @@
           i64.store offset=8 align=1
           local.get 0
           i64.const 0
-          i64.store
+          i64.store            ;; success marker
           local.get 0
           local.get 2
           i32.const 56
@@ -2228,46 +2400,65 @@
           i64.store align=1
           br 2 (;@1;)
         end
+        ;; Decode error
         local.get 0
         i64.const 1
         i64.store
         br 1 (;@1;)
       end
+      ;; Read error
       local.get 0
       i64.const 1
       i64.store
     end
+    
     local.get 2
     i32.const -64
     i32.sub
     global.set 0)
-  (func (;37;) (type 0) (param i32 i32)
+
+  ;; Function 37: Encode u32 value to encoder
+  ;; Writes 4-byte integer in little-endian format
+  ;; Used for: Encoding counters, discriminants, Mapping prefixes
+  ;; Parameters: (value_u32, encoder_ptr) -> void
+  (func $encode_u32 (;37;) (type 0) (param i32 i32)
     (local i32)
     global.get 0
     i32.const 16
     i32.sub
     local.tee 2
     global.set 0
+    
+    ;; Store u32 on stack
     local.get 2
     local.get 0
     i32.store offset=12
+    
+    ;; Write 4 bytes to encoder
     local.get 1
     local.get 2
     i32.const 12
     i32.add
     i32.const 4
     call 26
+    
     local.get 2
     i32.const 16
     i32.add
     global.set 0)
-  (func (;38;) (type 4) (param i32)
+
+  ;; Function 38: Emit Transfer event
+  ;; Constructs and emits Transfer event
+  ;; Parameters: (transfer_event_ptr) -> void
+  (func $emit_transfer_event (;38;) (type 4) (param i32)
     (local i32 i32 i32 i32)
     global.get 0
     i32.const 80
     i32.sub
     local.tee 1
     global.set 0
+    
+    ;; Copy event data
     local.get 1
     local.get 0
     i32.const 48
@@ -2278,6 +2469,8 @@
     local.get 0
     i32.const 66280
     i32.store offset=52
+    
+    ;; Encode event type
     local.get 0
     local.get 0
     i32.store offset=64
@@ -2290,6 +2483,8 @@
     local.get 1
     i32.const 65610
     call 30
+    
+    ;; Build event buffer
     local.get 0
     i32.const 68
     i32.add
@@ -2299,6 +2494,7 @@
     i32.const -64
     i32.sub
     call 39
+    
     block  ;; label = @1
       local.get 0
       i32.load offset=72
@@ -2308,6 +2504,7 @@
       local.tee 1
       i32.lt_u
       br_if 0 (;@1;)
+      
       local.get 0
       i32.load offset=68
       local.set 4
@@ -2324,6 +2521,8 @@
       local.get 4
       i32.add
       i32.store offset=68
+      
+      ;; Encode event fields
       local.get 0
       local.get 3
       call 31
@@ -2335,6 +2534,8 @@
       i64.load
       local.get 3
       call 27
+      
+      ;; Emit
       local.get 0
       i32.load offset=76
       local.tee 2
@@ -2342,12 +2543,14 @@
       i32.load offset=72
       i32.gt_u
       br_if 0 (;@1;)
+      
       local.get 4
       local.get 1
       local.get 0
       i32.load offset=68
       local.get 2
       call 2
+      
       local.get 0
       i32.const 80
       i32.add
@@ -2355,13 +2558,18 @@
       return
     end
     unreachable)
-  (func (;39;) (type 1) (param i32 i32 i32)
+
+  ;; Function 39: Build event topics buffer
+  ;; Encodes AccountId, hashes it, appends to buffer (or writes None)
+  ;; Parameters: (result_ptr, encoder_ptr, account_id_ptr) -> void
+  (func $build_event_topic_hash (;39;) (type 1) (param i32 i32 i32)
     (local i32 i32 i32 i32 i32)
     global.get 0
     i32.const 48
     i32.sub
     local.tee 3
     global.set 0
+    
     block  ;; label = @1
       block  ;; label = @2
         local.get 2
@@ -2374,6 +2582,7 @@
           local.tee 4
           i32.lt_u
           br_if 2 (;@1;)
+          
           local.get 1
           i32.load
           local.set 6
@@ -2392,6 +2601,7 @@
           i32.add
           local.tee 6
           i32.store offset=4
+          
           local.get 2
           i32.load
           local.get 3
@@ -2399,6 +2609,7 @@
           i32.add
           local.tee 7
           call 31
+          
           local.get 3
           i32.load offset=12
           local.tee 2
@@ -2406,11 +2617,13 @@
           i32.load offset=8
           i32.gt_u
           br_if 2 (;@1;)
+          
           local.get 7
           local.get 3
           i32.load offset=4
           local.get 2
           call 32
+          
           local.get 3
           i32.const 0
           i32.store offset=44
@@ -2420,11 +2633,13 @@
           local.get 3
           local.get 6
           i32.store offset=36
+          
           local.get 7
           local.get 3
           i32.const 36
           i32.add
           call 31
+          
           local.get 4
           local.get 3
           i32.load offset=44
@@ -2438,6 +2653,8 @@
           i32.store offset=8
           br 1 (;@2;)
         end
+        
+        ;; None path
         local.get 1
         call 33
       end
@@ -2453,6 +2670,7 @@
       i32.add
       i32.load
       i32.store
+      
       local.get 3
       i32.const 48
       i32.add
@@ -2460,13 +2678,19 @@
       return
     end
     unreachable)
-  (func (;40;) (type 4) (param i32)
+
+  ;; Function 40: Emit complex event (Transfer with 3 topics)
+  ;; Constructs and emits event with 3 indexed topics
+  ;; Parameters: (event_struct_ptr) -> void
+  (func $emit_event_3_topics (;40;) (type 4) (param i32)
     (local i32 i32 i32)
     global.get 0
     i32.const 112
     i32.sub
     local.tee 1
     global.set 0
+    
+    ;; Copy event structure (88 bytes)
     local.get 1
     local.get 0
     i32.const 88
@@ -2477,16 +2701,22 @@
     local.get 0
     i32.const 66280
     i32.store offset=88
+    
+    ;; Encode topic count (3)
     local.get 0
     i32.const 88
     i32.add
     local.tee 1
     i32.const 3
     call 34
+    
+    ;; Encode topic 1 (event signature)
     local.get 1
     i32.const 65577
     call 30
+    
     block  ;; label = @1
+      ;; Check if topic 2 should be Some or None
       local.get 0
       i32.load8_u offset=16
       i32.const 1
@@ -2504,7 +2734,9 @@
       i32.add
       call 33
     end
+    
     block  ;; label = @1
+      ;; Check if topic 3 should be Some or None
       local.get 0
       i32.load8_u offset=49
       i32.const 1
@@ -2524,6 +2756,7 @@
       i32.add
       call 33
     end
+    
     block  ;; label = @1
       local.get 0
       i32.load offset=92
@@ -2533,6 +2766,7 @@
       local.tee 1
       i32.lt_u
       br_if 0 (;@1;)
+      
       local.get 0
       i32.load offset=88
       local.set 3
@@ -2549,6 +2783,8 @@
       local.get 3
       i32.add
       i32.store offset=100
+      
+      ;; Encode event data fields
       local.get 0
       i32.const 16
       i32.add
@@ -2570,6 +2806,7 @@
       i64.load
       local.get 2
       call 27
+      
       local.get 0
       i32.load offset=108
       local.tee 2
@@ -2577,12 +2814,15 @@
       i32.load offset=104
       i32.gt_u
       br_if 0 (;@1;)
+      
+      ;; Emit event
       local.get 3
       local.get 1
       local.get 0
       i32.load offset=100
       local.get 2
       call 2
+      
       local.get 0
       i32.const 112
       i32.add
@@ -2590,7 +2830,11 @@
       return
     end
     unreachable)
-  (func (;41;) (type 0) (param i32 i32)
+
+  ;; Function 41: Encode Option<AccountId>
+  ;; Writes Option discriminant + AccountId if Some
+  ;; Parameters: (option_ptr, encoder_ptr) -> void
+  (func $encode_option_account_id (;41;) (type 0) (param i32 i32)
     local.get 0
     i32.load8_u
     i32.eqz
@@ -2600,6 +2844,7 @@
       call 57
       return
     end
+    
     local.get 1
     i32.const 1
     call 57
@@ -2608,13 +2853,19 @@
     i32.add
     local.get 1
     call 31)
-  (func (;42;) (type 4) (param i32)
+
+  ;; Function 42: Get caller AccountId from host
+  ;; Retrieves the AccountId of the contract caller
+  ;; Parameters: (output_buffer_ptr) -> void
+  (func $get_caller_account_id (;42;) (type 4) (param i32)
     (local i32 i32 i32)
     global.get 0
     i32.const 48
     i32.sub
     local.tee 1
     global.set 0
+    
+    ;; Call seal_caller
     local.get 1
     i32.const 16384
     i32.store offset=4
@@ -2624,13 +2875,17 @@
     i32.add
     local.tee 2
     call 6
+    
     block  ;; label = @1
+      ;; Validate size
       local.get 1
       i32.load offset=4
       local.tee 3
       i32.const 16385
       i32.ge_u
       br_if 0 (;@1;)
+      
+      ;; Copy to output
       local.get 1
       local.get 3
       i32.store offset=44
@@ -2642,11 +2897,14 @@
       i32.const 40
       i32.add
       call 35
+      
       local.get 1
       i32.load8_u offset=4
       i32.const 1
       i32.eq
       br_if 0 (;@1;)
+      
+      ;; Copy AccountId
       local.get 0
       local.get 1
       i64.load offset=6 align=1
@@ -2679,6 +2937,7 @@
       local.get 1
       i32.load8_u offset=5
       i32.store8
+      
       local.get 1
       i32.const 48
       i32.add
@@ -2686,13 +2945,19 @@
       return
     end
     unreachable)
-  (func (;43;) (type 10) (result i32)
+
+  ;; Function 43: Check if contract was paid
+  ;; Reads value_transferred and checks if non-zero
+  ;; Returns: 5 if no value, 4 if value sent
+  (func $check_value_transferred (;43;) (type 10) (result i32)
     (local i32 i32 i64 i64)
     global.get 0
     i32.const 32
     i32.sub
     local.tee 0
     global.set 0
+    
+    ;; Read transferred value
     local.get 0
     i32.const 16
     i32.add
@@ -2702,6 +2967,7 @@
     local.get 0
     i64.const 0
     i64.store offset=8
+    
     local.get 0
     i32.const 16
     i32.store offset=28
@@ -2712,6 +2978,7 @@
     i32.const 28
     i32.add
     call 7
+    
     local.get 0
     i32.load offset=28
     i32.const 17
@@ -2719,16 +2986,20 @@
     if  ;; label = @1
       unreachable
     end
+    
+    ;; Check if zero
     local.get 1
     i64.load
     local.set 2
     local.get 0
     i64.load offset=8
     local.set 3
+    
     local.get 0
     i32.const 32
     i32.add
     global.set 0
+    
     i32.const 5
     i32.const 4
     local.get 2
@@ -2736,25 +3007,43 @@
     i64.or
     i64.eqz
     select)
-  (func (;44;) (type 3) (param i32 i32) (result i32)
+
+  ;; Function 44: Compare two AccountIds (not equal)
+  ;; Wrapper around memcmp for AccountId inequality
+  ;; Parameters: (account_id1, account_id2) -> bool
+  ;; Returns: 1 if different, 0 if equal
+  (func $account_id_ne (;44;) (type 3) (param i32 i32) (result i32)
     local.get 0
     local.get 1
     call 45
     i32.const 1
     i32.xor)
-  (func (;45;) (type 3) (param i32 i32) (result i32)
+
+  ;; Function 45: Compare two AccountIds (equal)
+  ;; Wrapper around memcmp for AccountId equality
+  ;; Parameters: (account_id1, account_id2) -> bool
+  ;; Returns: 1 if equal, 0 if different
+  (func $account_id_eq (;45;) (type 3) (param i32 i32) (result i32)
     local.get 0
     local.get 1
     i32.const 32
     call 12
     i32.eqz)
-  (func (;46;) (type 0) (param i32 i32)
+
+  ;; Function 46: Read AccountData from storage (internal helper)
+  ;; Loads account balance data from contract storage, returns zeroed data if not found
+  ;; Used for: All balance queries and modifications
+  ;; Parameters: (result_ptr, account_id_ptr) -> void
+  ;; Result: Writes 48-byte AccountData struct to result_ptr
+  (func $read_account_from_storage (;46;) (type 0) (param i32 i32)
     (local i32 i32 i32 i32 i64 i64 i64 i64 i64)
     global.get 0
     i32.const 80
     i32.sub
-    local.tee 2
+    local.tee 2          ;; Allocate 80-byte stack frame
     global.set 0
+    
+    ;; Build storage key: copy AccountId (32 bytes) to stack at offset 16-48
     local.get 2
     i32.const 24
     i32.add
@@ -2762,7 +3051,7 @@
     i32.const 8
     i32.add
     i64.load align=1
-    i64.store align=4
+    i64.store align=4    ;; Copy bytes 8-15 of AccountId
     local.get 2
     i32.const 32
     i32.add
@@ -2770,7 +3059,7 @@
     i32.const 16
     i32.add
     i64.load align=1
-    i64.store align=4
+    i64.store align=4    ;; Copy bytes 16-23 of AccountId
     local.get 2
     i32.const 40
     i32.add
@@ -2778,60 +3067,75 @@
     i32.const 24
     i32.add
     i64.load align=1
-    i64.store align=4
+    i64.store align=4    ;; Copy bytes 24-31 of AccountId
+    
+    ;; Set Mapping prefix for accounts at offset 12
     local.get 2
-    i32.const 65540
+    i32.const 65540      ;; Accounts mapping prefix
     i32.store offset=12
     local.get 2
     local.get 1
     i64.load align=1
-    i64.store offset=16 align=4
+    i64.store offset=16 align=4 ;; Copy bytes 0-7 of AccountId
+    
+    ;; Initialize encoder for storage key at offset 56
     local.get 2
-    i64.const 16384
+    i64.const 16384      ;; capacity = 16384
     i64.store offset=60 align=4
     local.get 2
-    i32.const 66280
+    i32.const 66280      ;; Global encoder buffer
     i32.store offset=56
+    
+    ;; Encode storage key (Mapping prefix + AccountId hash)
     local.get 2
     i32.const 12
     i32.add
     local.get 2
     i32.const 56
     i32.add
-    local.tee 4
-    call 17
+    local.tee 4          ;; Local 4: encoder ptr
+    call 17              ;; encode_mapping_key
+    
     block  ;; label = @1
       block  ;; label = @2
         block  ;; label = @3
+          ;; Validate encoder state
           local.get 2
-          i32.load offset=60
+          i32.load offset=60   ;; encoder.capacity
           local.tee 3
           local.get 2
-          i32.load offset=64
+          i32.load offset=64   ;; encoder.used
           local.tee 1
           i32.lt_u
           br_if 0 (;@3;)
+          
           local.get 2
-          i32.load offset=56
+          i32.load offset=56   ;; encoder.ptr
           local.set 5
+          
+          ;; Update encoder for seal_get_storage call
           local.get 2
           local.get 3
           local.get 1
           i32.sub
-          local.tee 3
+          local.tee 3          ;; remaining capacity
           i32.store offset=56
-          local.get 5
-          local.get 1
+          
+          ;; Call seal_get_storage
+          local.get 5          ;; key_ptr
+          local.get 1          ;; key_len
           local.get 1
           local.get 5
           i32.add
-          local.tee 5
-          local.get 4
-          call 0
+          local.tee 5          ;; value_ptr (after key in buffer)
+          local.get 4          ;; value_len_ptr
+          call 0               ;; seal_get_storage
           local.set 1
+          
+          ;; Validate result
           local.get 3
           local.get 2
-          i32.load offset=56
+          i32.load offset=56   ;; actual bytes written
           local.tee 3
           i32.lt_u
           local.get 1
@@ -2839,24 +3143,31 @@
           i32.ge_u
           i32.or
           br_if 0 (;@3;)
+          
+          ;; Decode result code
           local.get 1
-          i32.const 65906
+          i32.const 65906      ;; Result code lookup table
           i32.add
           i32.load8_u
           local.tee 1
           i32.const 3
           i32.eq
-          br_if 1 (;@2;)
+          br_if 1 (;@2;)      ;; Jump to KeyNotFound handler
+          
           local.get 1
           i32.const 16
           i32.ne
-          br_if 0 (;@3;)
+          br_if 0 (;@3;)      ;; Exit if not Success
+          
+          ;; Success: prepare to decode AccountData
           local.get 2
           local.get 3
           i32.store offset=52
           local.get 2
           local.get 5
           i32.store offset=48
+          
+          ;; Decode first u128 (free balance)
           local.get 4
           local.get 2
           i32.const 48
@@ -2866,82 +3177,105 @@
           local.get 2
           i32.load offset=56
           br_if 0 (;@3;)
+          
           local.get 2
           i32.const 72
           i32.add
           local.tee 1
           i64.load
-          local.set 6
+          local.set 6        ;; free (high 64)
           local.get 2
           i64.load offset=64
-          local.set 7
+          local.set 7        ;; free (low 64)
+          
+          ;; Decode second u128 (reserved balance)
           local.get 4
           local.get 3
           call 22
           local.get 2
           i32.load offset=56
           br_if 0 (;@3;)
+          
           local.get 1
           i64.load
-          local.set 8
+          local.set 8        ;; reserved (high 64)
           local.get 2
           i64.load offset=64
-          local.set 9
+          local.set 9        ;; reserved (low 64)
+          
+          ;; Decode third u128 (frozen balance)
           local.get 4
           local.get 3
           call 22
           local.get 2
           i32.load offset=56
           br_if 0 (;@3;)
+          
+          ;; Validate all data consumed
           local.get 2
           i32.load offset=52
           br_if 0 (;@3;)
+          
+          ;; Load frozen balance
           local.get 2
           i64.load offset=64
-          local.set 10
+          local.set 10       ;; frozen (low 64)
+          
+          ;; Store all fields in result (48 bytes total)
           local.get 0
           local.get 1
           i64.load
-          i64.store offset=40
+          i64.store offset=40  ;; frozen (high 64)
           local.get 0
           local.get 10
-          i64.store offset=32
+          i64.store offset=32  ;; frozen (low 64)
           local.get 0
           local.get 8
-          i64.store offset=24
+          i64.store offset=24  ;; reserved (high 64)
           local.get 0
           local.get 9
-          i64.store offset=16
+          i64.store offset=16  ;; reserved (low 64)
           local.get 0
           local.get 6
-          i64.store offset=8
+          i64.store offset=8   ;; free (high 64)
           local.get 0
           local.get 7
-          i64.store
+          i64.store            ;; free (low 64)
           br 2 (;@1;)
         end
         unreachable
       end
+      
+      ;; KeyNotFound path: return zeroed AccountData
       local.get 0
       i32.const 0
       i32.const 48
-      call 11
+      call 11            ;; memset to zero
       drop
     end
+    
     local.get 2
     i32.const 80
     i32.add
     global.set 0)
-  (func (;47;) (type 11) (param i32 i64 i64 i32 i32)
+
+  ;; Function 47: Calculate reducible balance
+  ;; Computes maximum balance that can be reduced
+  ;; Parameters: (result_ptr, amount_low, amount_high, account_data_ptr, preserve_flag) -> void
+  (func $calculate_reducible_balance (;47;) (type 11) (param i32 i64 i64 i32 i32)
     (local i64 i64 i64 i64 i32)
     global.get 0
     i32.const 48
     i32.sub
     local.tee 9
     global.set 0
+    
+    ;; Load account data
     local.get 9
     local.get 3
     call 46
+    
+    ;; Calculate free - frozen
     local.get 0
     i64.const 0
     i64.const 0
@@ -3015,6 +3349,7 @@
     local.tee 4
     select
     i64.store offset=8
+    
     local.get 0
     i64.const 0
     local.get 1
@@ -3024,23 +3359,36 @@
     local.get 4
     select
     i64.store
+    
     local.get 9
     i32.const 48
     i32.add
     global.set 0)
-  (func (;48;) (type 3) (param i32 i32) (result i32)
+
+  ;; Function 48: Read 4-byte selector from input
+  ;; Reads message selector (4 bytes)
+  ;; Parameters: (reader_ptr, output_ptr) -> error_flag
+  (func $read_selector (;48;) (type 3) (param i32 i32) (result i32)
+    ;; Zero output
     local.get 1
     i32.const 0
     i32.store align=1
+    ;; Read 4 bytes
     local.get 0
     local.get 1
     i32.const 4
     call 15)
-  (func (;49;) (type 0) (param i32 i32)
+
+  ;; Function 49: Encode Result and return
+  ;; Encodes Result<(), Error> and calls seal_return
+  ;; Parameters: (return_value_ptr, error_discriminant) -> never
+  (func $encode_and_return_result (;49;) (type 0) (param i32 i32)
     (local i32)
+    ;; Prepare return buffer
     i32.const 66280
     i32.const 0
     i32.store8
+    
     i32.const 2
     local.set 2
     i32.const 66281
@@ -3060,17 +3408,24 @@
       i32.const 0
     end
     i32.store8
+    
     local.get 0
     local.get 2
     call 55
     unreachable)
-  (func (;50;) (type 12) (param i64 i64)
+
+  ;; Function 50: Return u128 value to caller
+  ;; Encodes Result<u128> and returns
+  ;; Parameters: (value_low, value_high) -> never
+  (func $return_u128_result (;50;) (type 12) (param i64 i64)
     (local i32)
     global.get 0
     i32.const 16
     i32.sub
     local.tee 2
     global.set 0
+    
+    ;; Encode Result::Ok + u128
     local.get 2
     i32.const 66280
     i32.store offset=4
@@ -3080,12 +3435,14 @@
     local.get 2
     i64.const 4294983680
     i64.store offset=8 align=4
+    
     local.get 0
     local.get 1
     local.get 2
     i32.const 4
     i32.add
     call 27
+    
     local.get 2
     i32.load offset=12
     local.tee 2
@@ -3094,11 +3451,16 @@
     if  ;; label = @1
       unreachable
     end
+    
     i32.const 0
     local.get 2
     call 55
     unreachable)
-  (func (;51;) (type 5)
+
+  ;; Function 51: Return success (Ok(())) to caller
+  ;; Shortcut for returning successful unit result
+  ;; Parameters: () -> never
+  (func $return_ok_unit (;51;) (type 5)
     i32.const 66280
     i32.const 0
     i32.store16 align=1
@@ -3106,21 +3468,28 @@
     i32.const 2
     call 55
     unreachable)
-  (func (;52;) (type 0) (param i32 i32)
+
+  ;; Function 52: Return error result
+  ;; Encodes Result<Error> and returns
+  ;; Parameters: (result_ptr, error_struct_ptr) -> never
+  (func $return_result_error (;52;) (type 0) (param i32 i32)
     (local i32 i32 i32)
     global.get 0
     i32.const 16
     i32.sub
     local.tee 2
     global.set 0
+    
     local.get 2
     i32.const 16384
     i32.store offset=8
     local.get 2
     i32.const 66280
     i32.store offset=4
+    
     i32.const 2
     local.set 3
+    
     block  ;; label = @1
       block (result i32)  ;; label = @2
         local.get 1
@@ -3132,6 +3501,7 @@
           i32.const 66280
           i32.const 0
           i32.store8
+          
           local.get 4
           i32.const 1
           i32.and
@@ -3147,12 +3517,14 @@
             i32.const 66282
             br 2 (;@2;)
           end
+          
           local.get 2
           i32.const 2
           i32.store offset=12
           i32.const 66281
           i32.const 0
           i32.store8
+          
           local.get 1
           i64.load offset=8
           local.get 1
@@ -3163,6 +3535,7 @@
           i32.const 4
           i32.add
           call 27
+          
           local.get 2
           i32.load offset=12
           local.tee 3
@@ -3171,6 +3544,7 @@
           br_if 2 (;@1;)
           unreachable
         end
+        
         i32.const 1
         local.set 1
         i32.const 66280
@@ -3181,11 +3555,16 @@
       local.get 1
       i32.store8
     end
+    
     local.get 0
     local.get 3
     call 55
     unreachable)
-  (func (;53;) (type 5)
+
+  ;; Function 53: Return error (shortcut)
+  ;; Returns generic error result
+  ;; Parameters: () -> never
+  (func $return_err (;53;) (type 5)
     i32.const 66280
     i32.const 257
     i32.store16 align=1
@@ -3193,25 +3572,34 @@
     i32.const 2
     call 55
     unreachable)
-  (func (;54;) (type 4) (param i32)
+
+  ;; Function 54: Encode and return AccountData
+  ;; Encodes full AccountData and returns
+  ;; Parameters: (account_data_ptr) -> never
+  (func $return_account_data (;54;) (type 4) (param i32)
     (local i32 i32 i32 i32 i32)
     global.get 0
     i32.const 16
     i32.sub
     local.tee 1
     global.set 0
+    
+    ;; Initialize encoder
     local.get 1
     i64.const 16384
     i64.store offset=8 align=4
     local.get 1
     i32.const 66280
     i32.store offset=4
+    
+    ;; Encode Result::Ok discriminant
     i32.const 0
     local.get 1
     i32.const 4
     i32.add
     local.tee 2
     call 37
+    
     block  ;; label = @1
       local.get 1
       i32.load offset=8
@@ -3221,6 +3609,7 @@
       local.tee 3
       i32.lt_u
       br_if 0 (;@1;)
+      
       local.get 1
       i32.load offset=4
       local.set 4
@@ -3237,6 +3626,8 @@
       local.get 4
       i32.add
       i32.store offset=4
+      
+      ;; Encode AccountData
       local.get 0
       i64.load
       local.get 0
@@ -3245,6 +3636,7 @@
       i64.load
       local.get 2
       call 27
+      
       local.get 0
       i64.load offset=16
       local.get 0
@@ -3253,6 +3645,7 @@
       i64.load
       local.get 2
       call 27
+      
       local.get 0
       i64.load offset=32
       local.get 0
@@ -3261,20 +3654,25 @@
       i64.load
       local.get 2
       call 27
+      
+      ;; Encode additional fields
       local.get 0
       i32.load offset=80
       local.get 2
       call 37
+      
       local.get 0
       i32.const 48
       i32.add
       local.get 2
       call 31
+      
       local.get 0
       i32.const 84
       i32.add
       local.get 2
       call 41
+      
       local.get 1
       i32.load offset=12
       local.tee 0
@@ -3282,6 +3680,7 @@
       i32.load offset=8
       i32.gt_u
       br_if 0 (;@1;)
+      
       local.get 4
       local.get 3
       local.get 1
@@ -3289,6 +3688,7 @@
       local.get 0
       call 3
       drop
+      
       local.get 1
       i32.const 16
       i32.add
@@ -3296,30 +3696,43 @@
       return
     end
     unreachable)
-  (func (;55;) (type 0) (param i32 i32)
+
+  ;; Function 55: seal_return wrapper
+  ;; Calls seal_return to exit contract
+  ;; Parameters: (flags, data_len) -> never
+  (func $seal_return_wrapper (;55;) (type 0) (param i32 i32)
     local.get 0
     i32.const 66280
     local.get 1
     call 5
     unreachable)
-  (func (;56;) (type 0) (param i32 i32)
+
+  ;; Function 56: Decode Option<AccountId> from input buffer
+  ;; Reads Option discriminant and AccountId if present
+  ;; Parameters: (result_ptr, reader_ptr) -> void
+  (func $decode_option_account_id_full (;56;) (type 0) (param i32 i32)
     (local i32 i32)
     global.get 0
     i32.const 48
     i32.sub
     local.tee 2
     global.set 0
+    
+    ;; Read discriminant
     local.get 2
     i32.const 8
     i32.add
     local.get 1
     call 18
+    
     i32.const 2
     local.set 3
+    
     block  ;; label = @1
       local.get 2
       i32.load8_u offset=8
       br_if 0 (;@1;)
+      
       block  ;; label = @2
         block  ;; label = @3
           local.get 2
@@ -3330,6 +3743,8 @@
         local.set 3
         br 1 (;@1;)
       end
+      
+      ;; Read AccountId
       local.get 2
       i32.const 15
       i32.add
@@ -3338,6 +3753,7 @@
       local.get 2
       i32.load8_u offset=15
       br_if 0 (;@1;)
+      
       local.get 0
       local.get 2
       i64.load offset=16 align=1
@@ -3369,14 +3785,20 @@
       i32.const 1
       local.set 3
     end
+    
     local.get 0
     local.get 3
     i32.store8
+    
     local.get 2
     i32.const 48
     i32.add
     global.set 0)
-  (func (;57;) (type 0) (param i32 i32)
+
+  ;; Function 57: Write single byte to encoder
+  ;; Low-level encoder operation
+  ;; Parameters: (encoder_ptr, byte_value) -> void
+  (func $encoder_write_byte (;57;) (type 0) (param i32 i32)
     (local i32)
     local.get 0
     i32.load offset=8
@@ -3399,28 +3821,36 @@
       return
     end
     unreachable)
-  (func (;58;) (type 6) (param i32) (result i32)
+
+  ;; Function 58: Decode Preservation enum
+  ;; Reads enum discriminant (0-2)
+  ;; Parameters: (reader_ptr) -> value
+  (func $decode_preservation (;58;) (type 6) (param i32) (result i32)
     (local i32 i32)
     global.get 0
     i32.const 16
     i32.sub
     local.tee 1
     global.set 0
+    
     local.get 1
     i32.const 8
     i32.add
     local.get 0
     call 18
+    
     local.get 1
     i32.load8_u offset=9
     local.set 0
     local.get 1
     i32.load8_u offset=8
     local.set 2
+    
     local.get 1
     i32.const 16
     i32.add
     global.set 0
+    
     i32.const 2
     i32.const 1
     i32.const 2
@@ -3433,28 +3863,36 @@
     select
     local.get 2
     select)
-  (func (;59;) (type 6) (param i32) (result i32)
+
+  ;; Function 59: Decode ternary enum (Precision/Fortitude)
+  ;; Reads enum with 3 variants
+  ;; Parameters: (reader_ptr) -> value
+  (func $decode_ternary_enum (;59;) (type 6) (param i32) (result i32)
     (local i32 i32)
     global.get 0
     i32.const 16
     i32.sub
     local.tee 1
     global.set 0
+    
     local.get 1
     i32.const 8
     i32.add
     local.get 0
     call 18
+    
     local.get 1
     i32.load8_u offset=9
     local.set 0
     local.get 1
     i32.load8_u offset=8
     local.set 2
+    
     local.get 1
     i32.const 16
     i32.add
     global.set 0
+    
     i32.const 3
     i32.const 3
     local.get 0
@@ -3464,16 +3902,24 @@
     select
     local.get 2
     select)
-  (func (;60;) (type 13) (param i32 i32 i64 i64) (result i32)
+
+  ;; Function 60: Deposit into account with checks
+  ;; Increases account balance with validation
+  ;; Parameters: (account_data_ptr, flags, amount_low, amount_high) -> result_code
+  (func $deposit_into_account (;60;) (type 13) (param i32 i32 i64 i64) (result i32)
     (local i32 i32 i32 i64 i64 i64 i64 i64 i64 i64)
     global.get 0
     i32.const 128
     i32.sub
     local.tee 4
     global.set 0
+    
+    ;; Get caller
     local.get 4
     call 42
+    
     block  ;; label = @1
+      ;; Check authorization
       local.get 4
       local.get 0
       i32.const 48
@@ -3483,6 +3929,8 @@
       if  ;; label = @2
         i32.const 7
         local.set 5
+
+        ;; Check if amount is zero
         local.get 2
         local.get 3
         i64.or
@@ -3490,6 +3938,8 @@
         br_if 1 (;@1;)
         i32.const 4
         local.set 5
+        
+        ;; Add to free balance
         local.get 0
         i64.load
         local.tee 7
@@ -3517,12 +3967,15 @@
         i64.eq
         select
         br_if 1 (;@1;)
+        
         local.get 0
         local.get 11
         i64.store
         local.get 0
         local.get 7
         i64.store offset=8
+        
+        ;; Add to reserved
         local.get 0
         i64.load offset=16
         local.tee 8
@@ -3550,18 +4003,23 @@
         i64.eq
         select
         br_if 1 (;@1;)
+        
         local.get 0
         local.get 10
         i64.store offset=16
         local.get 0
         local.get 8
         i64.store offset=24
+        
+        ;; Check existential deposit
         local.get 4
         i32.const 32
         i32.add
         local.get 1
         call 46
-        block  ;; label = @3
+        
+        block  ;; label = @2
+          ;; If account already exists, skip ED check
           local.get 4
           i64.load offset=32
           local.tee 12
@@ -3573,7 +4031,9 @@
           i64.or
           i64.const 0
           i64.ne
-          br_if 0 (;@3;)
+          br_if 0 (;@2;)
+          
+          ;; Check ED requirement
           local.get 0
           i64.load offset=32
           local.get 2
@@ -3589,7 +4049,9 @@
           local.get 13
           i64.eq
           select
-          br_if 0 (;@3;)
+          br_if 0 (;@2;)
+          
+          ;; Revert changes
           local.get 0
           i64.const 0
           local.get 8
@@ -3660,6 +4122,8 @@
           local.set 5
           br 2 (;@1;)
         end
+        
+        ;; Check total overflow
         local.get 2
         local.get 12
         i64.add
@@ -3689,11 +4153,15 @@
         local.get 4
         local.get 2
         i64.store offset=40
+        
+        ;; Write updated account
         local.get 1
         local.get 4
         i32.const 32
         i32.add
         call 28
+        
+        ;; Emit Transfer event
         local.get 4
         i32.const 104
         i32.add
@@ -3744,14 +4212,20 @@
     i32.add
     global.set 0
     local.get 5)
-  (func (;61;) (type 14) (param i32 i32 i32 i64 i64 i32 i32)
+
+  ;; Function 61: Transfer with preservation checks
+  ;; Implements full transfer logic
+  ;; Parameters: (result_ptr, from_ptr, to_ptr, amount_low, amount_high, preservation, fortitude) -> void
+  (func $transfer_with_checks (;61;) (type 14) (param i32 i32 i32 i64 i64 i32 i32)
     (local i32 i32 i64 i64 i64 i64 i64 i64)
     global.get 0
     i32.const 128
     i32.sub
     local.tee 7
     global.set 0
+    
     block  ;; label = @1
+      ;; Check zero amount
       local.get 3
       local.get 4
       i64.or
@@ -3768,9 +4242,13 @@
         i32.store8
         br 1 (;@1;)
       end
+      
+      ;; Load sender account
       local.get 7
       local.get 2
       call 46
+      
+      ;; Calculate reducible balance
       local.get 7
       i32.const 48
       i32.add
@@ -3785,6 +4263,7 @@
       local.get 2
       local.get 5
       call 47
+      
       local.get 7
       i32.const 56
       i32.add
@@ -3793,6 +4272,8 @@
       local.get 7
       i64.load offset=48
       local.set 10
+      
+      ;; Perform transfer validation and execution
       block  ;; label = @2
         local.get 0
         block (result i32)  ;; label = @3
@@ -4204,37 +4685,49 @@
     i32.const 128
     i32.add
     global.set 0)
-  (func (;62;) (type 15) (param i32 i32 i32 i64 i64 i32) (result i32)
+
+  ;; Function 62: Check if transfer is allowed
+  ;; Validates balance operation
+  ;; Parameters: (config_ptr, account_ptr, flags, amount_low, amount_high, mode) -> result
+  (func $check_transfer_allowed (;62;) (type 15) (param i32 i32 i32 i64 i64 i32) (result i32)
     (local i32 i32 i64 i64 i64 i64 i64 i64 i64)
     global.get 0
     i32.const 192
     i32.sub
     local.tee 6
     global.set 0
+    
     i32.const 7
     local.set 7
+    
     block  ;; label = @1
+      ;; Quick zero check
       local.get 3
       local.get 4
       i64.or
       i64.eqz
       br_if 0 (;@1;)
+      
       block  ;; label = @2
         local.get 1
         local.get 2
         call 45
         i32.eqz
         if  ;; label = @3
+          ;; Load accounts
           local.get 6
           i32.const 8
           i32.add
           local.get 1
           call 46
+          
           local.get 6
           i32.const 56
           i32.add
           local.get 2
           call 46
+          
+          ;; Perform checks
           i64.const 0
           local.get 6
           i64.load offset=8
@@ -4533,6 +5026,7 @@
       i32.const 56
       i32.add
       call 28
+      ;; Emit event for transfer between different accounts
       local.get 6
       i32.const 129
       i32.add
@@ -4613,6 +5107,7 @@
     i32.add
     global.set 0
     local.get 7)
+
   (func (;63;) (type 5)
     (local i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i64 i64 i64 i64 i64 i64 i64 i64 i64 i64)
     global.get 0
