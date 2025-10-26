@@ -152,47 +152,63 @@
   ;; Layout: [stack | heap | static data]
   (import "env" "memory" (memory (;0;) 2 16))
 
-  (func (;9;) (type 2) (param i32 i32 i32) (result i32)
-    (local i32)
-    loop (result i32)  ;; label = @1
-      local.get 2
-      local.get 3
+  ;; ============================================================================
+  ;; LOW-LEVEL MEMORY OPERATIONS
+  ;; ============================================================================
+
+  ;; Function 9: Forward memory copy loop
+  ;; Copies memory byte-by-byte in forward direction (low to high addresses)
+  ;; Used when: source and destination don't overlap, or dest < src
+  ;; Parameters: (dest, src, len) -> dest
+  ;; Returns: Original destination pointer
+  (func $memcpy_forward_loop (;9;) (type 2) (param i32 i32 i32) (result i32)
+    (local i32)          ;; Local 3: loop counter
+    loop (result i32)    ;; label = @1
+      local.get 2        ;; len
+      local.get 3        ;; counter
       i32.eq
-      if (result i32)  ;; label = @2
-        local.get 0
+      if (result i32)    ;; label = @2 - if counter == len, done
+        local.get 0      ;; return dest
       else
         local.get 0
         local.get 3
-        i32.add
+        i32.add          ;; dest[counter]
         local.get 1
         local.get 3
         i32.add
-        i32.load8_u
-        i32.store8
+        i32.load8_u      ;; src[counter]
+        i32.store8       ;; dest[counter] = src[counter]
         local.get 3
         i32.const 1
         i32.add
-        local.set 3
-        br 1 (;@1;)
+        local.set 3      ;; counter++
+        br 1 (;@1;)      ;; continue loop
       end
     end)
-  (func (;10;) (type 2) (param i32 i32 i32) (result i32)
-    (local i32)
+
+  ;; Function 10: Safe memory move (handles overlapping regions)
+  ;; Chooses forward or backward copy based on pointer relationship
+  ;; Used for: SCALE codec buffer management, vector operations
+  ;; Parameters: (dest, src, len) -> dest
+  ;; Returns: Destination pointer
+  (func $memmove (;10;) (type 2) (param i32 i32 i32) (result i32)
+    (local i32)          ;; Local 3: working pointer
     block  ;; label = @1
-      local.get 0
-      local.get 1
+      local.get 0        ;; dest
+      local.get 1        ;; src
       i32.le_u
-      if  ;; label = @2
+      if  ;; label = @2 - if dest <= src (forward copy safe)
+        ;; Forward copy loop
         local.get 0
         local.set 3
         loop  ;; label = @3
-          local.get 2
+          local.get 2    ;; len
           i32.eqz
-          br_if 2 (;@1;)
+          br_if 2 (;@1;) ;; if len == 0, exit
           local.get 3
           local.get 1
           i32.load8_u
-          i32.store8
+          i32.store8     ;; *dest++ = *src++
           local.get 3
           i32.const 1
           i32.add
@@ -205,10 +221,11 @@
           i32.const 1
           i32.sub
           local.set 2
-          br 0 (;@3;)
+          br 0 (;@3;)    ;; continue
         end
         unreachable
       end
+      ;; Backward copy (dest > src, overlapping)
       local.get 0
       i32.const 1
       i32.sub
@@ -220,7 +237,7 @@
       loop  ;; label = @2
         local.get 2
         i32.eqz
-        br_if 1 (;@1;)
+        br_if 1 (;@1;)   ;; if len == 0, exit
         local.get 2
         local.get 3
         i32.add
@@ -228,85 +245,105 @@
         local.get 2
         i32.add
         i32.load8_u
-        i32.store8
+        i32.store8       ;; Copy from end backwards
         local.get 2
         i32.const 1
         i32.sub
         local.set 2
-        br 0 (;@2;)
+        br 0 (;@2;)      ;; continue
       end
       unreachable
     end
-    local.get 0)
-  (func (;11;) (type 2) (param i32 i32 i32) (result i32)
-    (local i32)
-    loop (result i32)  ;; label = @1
-      local.get 2
-      local.get 3
+    local.get 0)         ;; return dest
+
+  ;; Function 11: Memory fill loop
+  ;; Fills memory region with a specific byte value
+  ;; Used for: Zeroing buffers, initializing arrays
+  ;; Parameters: (dest, fill_byte, len) -> dest
+  ;; Returns: Destination pointer
+  (func $memset_loop (;11;) (type 2) (param i32 i32 i32) (result i32)
+    (local i32)          ;; Local 3: counter
+    loop (result i32)    ;; label = @1
+      local.get 2        ;; len
+      local.get 3        ;; counter
       i32.eq
-      if (result i32)  ;; label = @2
-        local.get 0
+      if (result i32)    ;; label = @2
+        local.get 0      ;; return dest
       else
         local.get 0
         local.get 3
         i32.add
-        local.get 1
-        i32.store8
+        local.get 1      ;; fill_byte
+        i32.store8       ;; dest[counter] = fill_byte
         local.get 3
         i32.const 1
         i32.add
-        local.set 3
-        br 1 (;@1;)
+        local.set 3      ;; counter++
+        br 1 (;@1;)      ;; continue loop
       end
     end)
-  (func (;12;) (type 2) (param i32 i32 i32) (result i32)
-    (local i32 i32)
+
+  ;; Function 12: Memory comparison (memcmp)
+  ;; Compares two memory regions byte-by-byte
+  ;; Used for: AccountId equality, storage key comparison
+  ;; Parameters: (ptr1, ptr2, len) -> difference
+  ;; Returns: 0 if equal, negative if ptr1 < ptr2, positive if ptr1 > ptr2
+  (func $memcmp (;12;) (type 2) (param i32 i32 i32) (result i32)
+    (local i32 i32)      ;; Local 3: byte1, Local 4: byte2
     loop  ;; label = @1
       local.get 2
       i32.eqz
-      if  ;; label = @2
+      if  ;; label = @2 - if len == 0
         i32.const 0
-        return
+        return           ;; regions are equal
       end
       local.get 2
       i32.const 1
       i32.sub
-      local.set 2
+      local.set 2        ;; len--
       local.get 1
       i32.load8_u
-      local.set 3
+      local.set 3        ;; byte2 = *ptr2
       local.get 0
       i32.load8_u
-      local.set 4
+      local.set 4        ;; byte1 = *ptr1
       local.get 1
       i32.const 1
       i32.add
-      local.set 1
+      local.set 1        ;; ptr2++
       local.get 0
       i32.const 1
       i32.add
-      local.set 0
+      local.set 0        ;; ptr1++
       local.get 3
       local.get 4
-      i32.eq
-      br_if 0 (;@1;)
+      i32.eq             ;; if bytes equal
+      br_if 0 (;@1;)     ;; continue loop
     end
-    local.get 4
-    local.get 3
-    i32.sub)
-  (func (;13;) (type 8) (param i32 i32 i32 i32)
-    local.get 1
-    local.get 3
+    local.get 4          ;; byte1
+    local.get 3          ;; byte2
+    i32.sub)             ;; return difference
+
+  ;; Function 13: Helper to validate exact memory copy length
+  ;; Validates that source and destination lengths match
+  ;; Used for: SCALE decoder safety checks
+  ;; Parameters: (dest, src, expected_len, actual_len) -> void
+  ;; Panics if: actual_len != expected_len
+  (func $validate_exact_copy (;13;) (type 8) (param i32 i32 i32 i32)
+    ;; Check if lengths match
+    local.get 1          ;; actual_len
+    local.get 3          ;; expected_len
     i32.eq
-    if  ;; label = @1
-      local.get 0
-      local.get 2
-      local.get 1
-      call 9
+    if  ;; label = @1 - if equal, perform copy
+      local.get 0        ;; dest
+      local.get 2        ;; src
+      local.get 1        ;; len
+      call 9             ;; Use $memcpy_forward_loop
       drop
       return
     end
-    unreachable)
+    unreachable)         ;; Panic on length mismatch
+
   (func (;14;) (type 2) (param i32 i32 i32) (result i32)
     (local i32)
     local.get 0
