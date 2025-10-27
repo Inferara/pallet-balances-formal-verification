@@ -64,7 +64,7 @@ All contract interactions follow the **Ink! ABI calling convention**:
    ```wasm
    seal_input(buffer_ptr: i32, buffer_len_ptr: i32)
    ```
-   Writes SCALE-encoded input to contract memory. The contract's dispatcher (function 60) then:
+   Writes SCALE-encoded input to contract memory. The contract's dispatcher (function 63) then:
    - Extracts the 4-byte selector
    - Matches selector to handler via cascading `br_table` dispatch
    - Decodes parameters from remaining bytes
@@ -97,7 +97,7 @@ The `Inspect` trait provides non-mutating methods to query account balances.
 
 ##### 1.1 `total_issuance() -> Balance`
 - **Selector**: `0x6AEA3206` 
-- **Handler**: Function 60, handler index 1
+- **Handler**: Function 63, handler index 1
 - **Wasm Flow**:
   ```wasm
   ;; Reads contract's internal state offset 0-15 (total_issuance)
@@ -107,14 +107,14 @@ The `Inspect` trait provides non-mutating methods to query account balances.
   i32.const 8
   i32.add
   i64.load              ;; total_issuance (high 64)
-  call 46               ;; return_u128_result
+  call 50               ;; return_u128_result
   ```
 - **Storage**: Read from contract state memory (not storage lookup)
 - **Returns**: `Result<u128, Error>` SCALE-encoded
 
 ##### 1.2 `minimum_balance() -> Balance`
 - **Selector**: `0xA7EAE324`
-- **Handler**: Function 60, handler index 3
+- **Handler**: Function 63, handler index 3
 - **Wasm Flow**:
   ```wasm
   ;; Read existential_deposit from contract state (offset 32-47)
@@ -124,13 +124,13 @@ The `Inspect` trait provides non-mutating methods to query account balances.
   i32.const 40
   i32.add
   i64.load              ;; ED (high 64)
-  call 46               ;; return_u128_result
+  call 50               ;; return_u128_result
   ```
 - **Note**: Returns value from in-memory contract state (offset 32)
 
 ##### 1.3 `balance(who: AccountId) -> Balance`
 - **Selector**: `0x0F5C5E92`
-- **Handler**: Function 60, handler index 9
+- **Handler**: Function 63, handler index 9
 - **Wasm Flow**:
   ```wasm
   ;; Decode AccountId from input buffer
@@ -138,7 +138,7 @@ The `Inspect` trait provides non-mutating methods to query account balances.
   i32.const 216
   i32.add
   local.get 1           ;; Reader state ptr
-  call 34               ;; decode_account_id
+  call 35               ;; decode_account_id
   
   ;; Check decode success
   local.get 0
@@ -152,7 +152,7 @@ The `Inspect` trait provides non-mutating methods to query account balances.
   local.get 0
   i32.const 217
   i32.add               ;; Decoded AccountId ptr
-  call 42               ;; read_account_from_storage (func 42)
+  call 46               ;; read_account_from_storage (func 46)
   
   ;; Extract free field (first u128 in AccountData at offset 0)
   local.get 0
@@ -161,14 +161,14 @@ The `Inspect` trait provides non-mutating methods to query account balances.
   i32.const 224
   i32.add
   i64.load              ;; free (high 64)
-  call 46               ;; return_u128_result
+  call 50               ;; return_u128_result
   ```
 - **Storage Key**: `BLAKE2(0x0001000F || account_id)` (prefix 65540)
 - **Returns**: `Result<u128, Error>` with account's free balance
 
 ##### 1.4 `total_balance(who: AccountId) -> Balance`
 - **Selector**: `0x7A2095E3`
-- **Handler**: Function 60, handler index 10
+- **Handler**: Function 63, handler index 10
 - **Wasm Flow**:
   ```wasm
   ;; Read account data
@@ -176,7 +176,7 @@ The `Inspect` trait provides non-mutating methods to query account balances.
   i32.const 216
   i32.add
   local.get 1           ;; Decoded AccountId
-  call 42               ;; read_account_from_storage
+  call 46               ;; read_account_from_storage
   
   ;; Load free and reserved balances
   local.get 0
@@ -209,13 +209,13 @@ The `Inspect` trait provides non-mutating methods to query account balances.
   
   ;; Return result
   local.get 13
-  call 46
+  call 50
   ```
 - **Arithmetic**: Uses saturating addition with overflow detection
 
 ##### 1.5 `reducible_balance(who: AccountId, preservation: Preservation, force: Fortitude) -> Balance`
 - **Selector**: `0x2E9A5C32`
-- **Handler**: Function 60, handler index 25
+- **Handler**: Function 63, handler index 25
 - **Wasm Flow**:
   ```wasm
   ;; Decode parameters
@@ -223,11 +223,11 @@ The `Inspect` trait provides non-mutating methods to query account balances.
   i32.const 208
   i32.add
   local.get 1           ;; Reader ptr
-  call 34               ;; decode_account_id
+  call 35               ;; decode_account_id
   
   ;; Decode preservation enum
   local.get 1
-  call 55               ;; decode_preservation
+  call 58               ;; decode_preservation
   
   ;; Calculate reducible balance
   local.get 0
@@ -239,7 +239,7 @@ The `Inspect` trait provides non-mutating methods to query account balances.
   i32.const 209
   i32.add               ;; AccountId ptr
   local.get 5           ;; preservation discriminant
-  call 43               ;; calculate_reducible_balance (func 43)
+  call 47               ;; calculate_reducible_balance (func 47)
   
   ;; Return result
   local.get 0
@@ -248,9 +248,9 @@ The `Inspect` trait provides non-mutating methods to query account balances.
   i32.const 224
   i32.add
   i64.load
-  call 46
+  call 50
   ```
-- **Preservation Modes** (in function 43):
+- **Preservation Modes** (in function 47):
   - `Expendable` (0): Returns `free - frozen`
   - `Preserve` (1): Returns `max(0, free - frozen - ED)`
   - `Protect` (2): Same as `Preserve`
@@ -264,26 +264,26 @@ The `Unbalanced` trait provides methods that directly mutate balances without cr
 
 ##### 2.1 `write_balance(who: AccountId, amount: Balance) -> Result<Option<Balance>>`
 - **Selector**: `0xDC9A5E14`
-- **Handler**: Function 60, handler index 24
+- **Handler**: Function 63, handler index 24
 - **Wasm Flow**:
   ```wasm
   ;; Authorization check (owner only)
   local.get 0
   i32.const 208
   i32.add
-  call 39               ;; get_caller_account_id
+  call 42               ;; get_caller_account_id
   
   local.get 0
   i32.const 208
   i32.add
   local.get 1           ;; Expected owner from state
-  call 41               ;; account_id_ne
+  call 44               ;; account_id_ne
   
   ;; If not owner, return Err(NotAllowed)
   if
     i32.const 1
     i32.const 6
-    call 45             ;; encode_and_return_result
+    call 49             ;; encode_and_return_result
   end
   
   ;; Read current account
@@ -291,7 +291,7 @@ The `Unbalanced` trait provides methods that directly mutate balances without cr
   i32.const 216
   i32.add
   local.get 2           ;; AccountId ptr
-  call 42               ;; read_account_from_storage
+  call 46               ;; read_account_from_storage
   
   ;; Calculate delta and check for dust
   ;; If 0 < new_balance < ED, call dust handler
@@ -312,12 +312,12 @@ The `Unbalanced` trait provides methods that directly mutate balances without cr
   i32.add
   call 28               ;; write_account_to_storage
   ```
-- **Dust Handling**: Delegates to function 63 (`check_deposit_feasibility`)
+- **Dust Handling**: Delegates to function 66 (`check_deposit_feasibility`)
 - **Issuance Update**: Adjusts both `total_issuance` and `active_issuance`
 
 ##### 2.2 `set_total_issuance(amount: Balance)`
 - **Selector**: `0xF9A48F8E`
-- **Handler**: Function 60, handler index 19
+- **Handler**: Function 63, handler index 19
 - **Wasm Flow**:
   ```wasm
   ;; Authorization check (owner only)
@@ -349,7 +349,7 @@ The `Unbalanced` trait provides methods that directly mutate balances without cr
 - **Selectors**: 
   - `deactivate`: `0x11D5A05F`
   - `reactivate`: `0xA7B9E95D`
-- **Handlers**: Function 60, handler indices 20-21
+- **Handlers**: Function 63, handler indices 20-21
 - **Wasm Flow** (deactivate):
   ```wasm
   ;; Authorization check
@@ -381,7 +381,7 @@ The `Unbalanced` trait provides methods that directly mutate balances without cr
 
 ##### 2.4 `increase_balance(who: AccountId, amount: Balance, precision: Precision) -> Result<Balance>`
 - **Selector**: `0xB2E13B27`
-- **Handler**: Function 60, handler index 16
+- **Handler**: Function 63, handler index 16
 - **Wasm Flow**:
   ```wasm
   ;; Decode AccountId and amount
@@ -392,7 +392,7 @@ The `Unbalanced` trait provides methods that directly mutate balances without cr
   i32.const 216
   i32.add
   local.get 1           ;; AccountId ptr
-  call 42
+  call 46
   
   ;; Check if new account (free = 0)
   local.get 0
@@ -417,12 +417,12 @@ The `Unbalanced` trait provides methods that directly mutate balances without cr
         ;; Return Err(BelowMinimum)
         i32.const 1
         i32.const 2
-        call 45
+        call 49
       else
         ;; Return Ok(0) for BestEffort
         i64.const 0
         i64.const 0
-        call 46
+        call 50
       end
     end
   end
@@ -449,7 +449,7 @@ The `Unbalanced` trait provides methods that directly mutate balances without cr
   local.get 0
   i32.const 456
   i32.add
-  call 37               ;; emit_transfer_event variant
+  call 38               ;; emit_transfer_event variant
   ```
 - **Precision Handling**:
   - `Exact`: Fails on overflow/ED violation
@@ -457,9 +457,9 @@ The `Unbalanced` trait provides methods that directly mutate balances without cr
 
 ##### 2.5 `decrease_balance(who: AccountId, amount: Balance, precision: Precision, preservation: Preservation, fortitude: Fortitude) -> Result<Balance>`
 - **Selector**: `0xA194B221`
-- **Handler**: Function 60, handler index 26
+- **Handler**: Function 63, handler index 26
 - **Wasm Flow**: 
-  - Delegates to burn_from logic (function 58)
+  - Delegates to burn_from logic (function 61)
   - See section 3.2 below for detailed flow
 
 ---
@@ -470,27 +470,27 @@ The `Mutate` trait provides methods that maintain balance conservation (transfer
 
 ##### 3.1 `transfer(source: AccountId, dest: AccountId, amount: Balance, preservation: Preservation) -> Result<Balance>`
 - **Selector**: `0xCE8F142D`
-- **Handler**: Function 60, handler index 5
+- **Handler**: Function 63, handler index 5
 - **Wasm Flow**:
   ```wasm
   ;; Get caller (enforced as source)
   local.get 0
   i32.const 456
   i32.add
-  call 39               ;; get_caller_account_id
+  call 42               ;; get_caller_account_id
   
   ;; Verify caller = decoded source
   local.get 0
   i32.const 456
   i32.add
   local.get 1           ;; Decoded source AccountId
-  call 41               ;; account_id_ne
+  call 44               ;; account_id_ne
   
   ;; If mismatch, return Err(NotAllowed)
   if
     i32.const 1
     i32.const 6
-    call 45
+    call 49
   end
   
   ;; Delegate to transfer_with_checks
@@ -505,7 +505,7 @@ The `Mutate` trait provides methods that maintain balance conservation (transfer
   local.get amount_high
   local.get preservation
   i32.const 1           ;; fortitude = Force
-  call 58               ;; transfer_with_checks (func 58)
+  call 61               ;; transfer_with_checks (func 61)
   
   ;; Check result
   local.get 0
@@ -516,13 +516,13 @@ The `Mutate` trait provides methods that maintain balance conservation (transfer
     local.get 0
     i32.const 456
     i32.add
-    call 48             ;; return_result_error
+    call 52             ;; return_result_error
   end
   
   ;; Success
-  call 47               ;; return_ok_unit
+  call 51               ;; return_ok_unit
   ```
-- **Preservation Enforcement** (in function 58):
+- **Preservation Enforcement** (in function 61):
   ```wasm
   ;; Calculate reducible balance
   local.get 0
@@ -536,7 +536,7 @@ The `Mutate` trait provides methods that maintain balance conservation (transfer
   i64.load              ;; ED (high)
   local.get 2           ;; from AccountId
   local.get 5           ;; preservation
-  call 43               ;; calculate_reducible_balance
+  call 47               ;; calculate_reducible_balance
   
   ;; Check if amount ≤ reducible
   local.get 3           ;; amount (low)
@@ -564,7 +564,7 @@ The `Mutate` trait provides methods that maintain balance conservation (transfer
 
 ##### 3.2 `burn_from(who: AccountId, amount: Balance, preservation: Preservation, precision: Precision, fortitude: Fortitude) -> Result<Balance>`
 - **Selector**: `0x9EA394B1`
-- **Handler**: Function 60, handler index 27
+- **Handler**: Function 63, handler index 27
 - **Wasm Flow**:
   ```wasm
   ;; Load account
@@ -572,17 +572,17 @@ The `Mutate` trait provides methods that maintain balance conservation (transfer
   i32.const 216
   i32.add
   local.get who
-  call 42               ;; read_account_from_storage
+  call 46               ;; read_account_from_storage
   
   ;; Calculate reducible balance
   local.get 0
   i32.const 456
-  i32.add               ;; Result destination
+  i32.add               ;; Result ptr
   local.get amount_low
   local.get amount_high
   local.get who
   local.get preservation
-  call 43               ;; calculate_reducible_balance
+  call 47               ;; calculate_reducible_balance (func 47)
   
   ;; Get reducible amount
   local.get 0
@@ -602,7 +602,7 @@ The `Mutate` trait provides methods that maintain balance conservation (transfer
       if
         ;; Return appropriate error
         ;; ... (check if InsufficientBalance or Expendability)
-        call 45
+        call 49
       end
       
       ;; Use exact amount
@@ -646,7 +646,7 @@ The `Mutate` trait provides methods that maintain balance conservation (transfer
     i32.const 216
     i32.add             ;; Account data
     local.get dust_ptr
-    call 63             ;; check_deposit_feasibility
+    call 66             ;; check_deposit_feasibility
     drop
   end
   
@@ -656,9 +656,9 @@ The `Mutate` trait provides methods that maintain balance conservation (transfer
   ;; Return actual burned amount
   local.get actual_burn_low
   local.get actual_burn_high
-  call 46
+  call 50
   ```
-- **Dust Handling** (in function 63):
+- **Dust Handling** (in function 66):
   - If `dust_trap` is set (state offset 84 = 1), transfers dust to trap account
   - Otherwise burns dust and emits `DustLost` event
 
@@ -670,7 +670,7 @@ The `InspectHold` trait deals with reserved (held) balances that cannot be spent
 
 ##### 4.1 `balance_on_hold(who: AccountId) -> Balance`
 - **Selector**: `0xA1B8F1E6`
-- **Handler**: Function 60, handler index 11
+- **Handler**: Function 63, handler index 11
 - **Wasm Flow**:
   ```wasm
   ;; Read account data
@@ -678,7 +678,7 @@ The `InspectHold` trait deals with reserved (held) balances that cannot be spent
   i32.const 216
   i32.add
   local.get 1           ;; AccountId ptr
-  call 42
+  call 46
   
   ;; Return account.reserved field (offset +16 in AccountData)
   local.get 0
@@ -687,7 +687,7 @@ The `InspectHold` trait deals with reserved (held) balances that cannot be spent
   i32.const 240
   i32.add
   i64.load              ;; reserved (high 64)
-  call 46
+  call 50
   ```
 - **AccountData Layout** (48 bytes total):
   ```
@@ -699,7 +699,7 @@ The `InspectHold` trait deals with reserved (held) balances that cannot be spent
 
 ##### 4.2 `total_balance_on_hold() -> Balance`
 - **Selector**: `0x33F3948D`
-- **Handler**: Function 60, handler index 21
+- **Handler**: Function 63, handler index 21
 - **Wasm Flow**:
   ```wasm
   ;; Read cached total_reserved from state (offset 16-31)
@@ -709,7 +709,7 @@ The `InspectHold` trait deals with reserved (held) balances that cannot be spent
   i32.const 24
   i32.add
   i64.load              ;; total_reserved (high)
-  call 46
+  call 50
   ```
 - **Note**: Returns pre-computed value from contract state
 
@@ -721,7 +721,7 @@ The `MutateHold` trait provides methods to reserve and unreserve balances.
 
 ##### 5.1 `hold(who: AccountId, amount: Balance) -> Result<()>`
 - **Selector**: `0xC1D8E627` (aliased as `reserve`)
-- **Handler**: Function 60, handler index 22
+- **Handler**: Function 63, handler index 22
 - **Wasm Flow**:
   ```wasm
   ;; Load account
@@ -729,7 +729,7 @@ The `MutateHold` trait provides methods to reserve and unreserve balances.
   i32.const 216
   i32.add
   local.get who
-  call 42
+  call 46
   
   ;; Calculate usable balance (free - frozen)
   local.get 0
@@ -745,7 +745,7 @@ The `MutateHold` trait provides methods to reserve and unreserve balances.
   if
     i32.const 1
     i32.const 3         ;; Err(LiquidityRestrictions)
-    call 45
+    call 49
   end
   
   ;; Subtract from free
@@ -771,7 +771,7 @@ The `MutateHold` trait provides methods to reserve and unreserve balances.
   if
     i32.const 1
     i32.const 4         ;; Err(Overflow)
-    call 45
+    call 49
   end
   
   ;; Store new reserved
@@ -787,12 +787,12 @@ The `MutateHold` trait provides methods to reserve and unreserve balances.
   call 28
   
   ;; Emit Reserved event
-  ;; ... (via function 37)
+  ;; ... (via function 38)
   ```
 
 ##### 5.2 `release(who: AccountId, amount: Balance, precision: Precision) -> Result<Balance>`
 - **Selector**: `0xF5A8B128` (aliased as `unreserve`)
-- **Handler**: Function 60, handler index 23
+- **Handler**: Function 63, handler index 23
 - **Wasm Flow**:
   ```wasm
   ;; Load account
@@ -800,7 +800,7 @@ The `MutateHold` trait provides methods to reserve and unreserve balances.
   i32.const 216
   i32.add
   local.get who
-  call 42
+  call 46
   
   ;; Calculate actual release amount
   local.get amount_low
@@ -839,7 +839,7 @@ The `MutateHold` trait provides methods to reserve and unreserve balances.
   ;; Return actual released amount
   local.get actual_low
   local.get actual_high
-  call 46
+  call 50
   ```
 
 ---
@@ -850,7 +850,7 @@ The `InspectFreeze` trait allows querying balance locks (frozen amounts).
 
 ##### 6.1 `balance_frozen(who: AccountId) -> Balance`
 - **Selector**: `0x2F1A9DDC`
-- **Handler**: Function 60, handler index 28
+- **Handler**: Function 63, handler index 28
 - **Wasm Flow**:
   ```wasm
   ;; Read account data
@@ -858,7 +858,7 @@ The `InspectFreeze` trait allows querying balance locks (frozen amounts).
   i32.const 216
   i32.add
   local.get who
-  call 42
+  call 46
   
   ;; Return account.frozen field (offset +32 in AccountData)
   local.get 0
@@ -867,12 +867,12 @@ The `InspectFreeze` trait allows querying balance locks (frozen amounts).
   i32.const 256
   i32.add
   i64.load              ;; frozen (high 64)
-  call 46
+  call 50
   ```
 
 ##### 6.2 `can_deposit(who: AccountId, amount: Balance, provenance: Provenance) -> DepositConsequence`
 - **Selector**: `0xB3F881A9`
-- **Handler**: Function 60, handler index 17
+- **Handler**: Function 63, handler index 17
 - **Wasm Flow**:
   ```wasm
   ;; Load account
@@ -880,7 +880,7 @@ The `InspectFreeze` trait allows querying balance locks (frozen amounts).
   i32.const 216
   i32.add
   local.get who
-  call 42
+  call 46
   
   ;; Check for overflow in free balance
   local.get 0
@@ -896,8 +896,8 @@ The `InspectFreeze` trait allows querying balance locks (frozen amounts).
   i64.gt_u              ;; Overflow?
   if
     i32.const 4         ;; DepositConsequence::Overflow
-    call 54             ;; encoder_write_byte
-    call 47             ;; return
+    call 57             ;; encoder_write_byte
+    call 51             ;; return
   end
   
   ;; Check total_issuance overflow
@@ -944,7 +944,7 @@ The `InspectFreeze` trait allows querying balance locks (frozen amounts).
 
 ##### 6.3 `can_withdraw(who: AccountId, amount: Balance) -> WithdrawConsequence`
 - **Selector**: `0xF7A8F3E1`
-- **Handler**: Function 60, handler index 18
+- **Handler**: Function 63, handler index 18
 - **Wasm Flow**:
   ```wasm
   ;; Load account
@@ -952,7 +952,7 @@ The `InspectFreeze` trait allows querying balance locks (frozen amounts).
   i32.const 216
   i32.add
   local.get who
-  call 42
+  call 46
   
   ;; Calculate usable balance (free - frozen)
   local.get 0
@@ -1010,7 +1010,7 @@ The `MutateFreeze` trait provides methods to set and remove balance locks.
 
 ##### 7.1 `set_freeze(who: AccountId, id: [u8; 8], amount: Balance) -> Result<()>`
 - **Selector**: `0xCD0F5A06` (aliased as `set_lock`)
-- **Handler**: Function 60, handler index 32
+- **Handler**: Function 63, handler index 32
 - **Wasm Flow**:
   ```wasm
   ;; Read existing locks from storage
@@ -1046,7 +1046,7 @@ The `MutateFreeze` trait provides methods to set and remove balance locks.
     if
       i32.const 1
       i32.const 5       ;; Err(TooManyLocks)
-      call 45
+      call 49
     end
     
     ;; Build new lock struct (24 bytes)
@@ -1123,7 +1123,7 @@ The `MutateFreeze` trait provides methods to set and remove balance locks.
 
 ##### 7.2 `thaw(who: AccountId, id: [u8; 8]) -> Result<()>`
 - **Selector**: `0x11A08D5C` (aliased as `remove_lock`)
-- **Handler**: Function 60, handler index 33
+- **Handler**: Function 63, handler index 33
 - **Wasm Flow**:
   ```wasm
   ;; Read locks vector
@@ -1228,7 +1228,7 @@ The `Balanced` trait provides methods that return imbalance objects (credit/debt
 
 ##### 8.1 `deposit(who: AccountId, amount: Balance, precision: Precision) -> Result<CreditImbalance>`
 - **Selector**: `0x05C81D55`
-- **Handler**: Function 60, handler index 6
+- **Handler**: Function 63, handler index 6
 - **Wasm Flow**:
   ```wasm
   ;; Same logic as increase_balance (handler 16)
@@ -1237,7 +1237,7 @@ The `Balanced` trait provides methods that return imbalance objects (credit/debt
   ;; Encode Result::Ok discriminant
   i32.const 0
   local.get encoder_ptr
-  call 36               ;; encode_u32
+  call 37               ;; encode_u32
   
   ;; Encode CreditImbalance struct (just the u128 amount)
   local.get actual_deposited_low
@@ -1247,13 +1247,13 @@ The `Balanced` trait provides methods that return imbalance objects (credit/debt
   
   ;; Return encoded result
   local.get encoded_len
-  call 52               ;; seal_return_wrapper
+  call 55               ;; seal_return_wrapper
   ```
 - **Note**: The contract doesn't maintain a separate imbalance registry; the imbalance is immediately encoded and returned
 
 ##### 8.2 `issue(amount: Balance) -> CreditImbalance`
 - **Selector**: `0x8B3BEC3B` (actually creates `pair`)
-- **Handler**: Function 60, handler index 0 (default case in dispatcher)
+- **Handler**: Function 63, handler index 0 (default case in dispatcher)
 - **Wasm Flow**:
   ```wasm
   ;; Check overflow in total_issuance
@@ -1265,12 +1265,12 @@ The `Balanced` trait provides methods that return imbalance objects (credit/debt
   if overflow
     i32.const 1
     i32.const 4         ;; Err(Overflow)
-    call 45
+    call 49
   end
   
   ;; Encode Result::Ok discriminant
   i32.const 0
-  call 36
+  call 37
   
   ;; Encode tuple (CreditImbalance, DebtImbalance)
   ;; Both have same amount value
@@ -1283,17 +1283,17 @@ The `Balanced` trait provides methods that return imbalance objects (credit/debt
   call 27               ;; Encode second u128
   
   ;; Return
-  call 52
+  call 55
   ```
 
 ##### 8.3 `rescind(amount: Balance) -> DebtImbalance`
 - **Selector**: `0x55F85D0F`
-- **Handler**: Function 60, handler index 29
+- **Handler**: Function 63, handler index 29
 - **Wasm Flow**: Similar to `issue`, but returns only `DebtImbalance` (single u128)
 
 ##### 8.4 `resolve(who: AccountId, credit: CreditImbalance) -> Result<()>`
 - **Selector**: `0x06A7D814`
-- **Handler**: Function 60, handler index 7
+- **Handler**: Function 63, handler index 7
 - **Wasm Flow**:
   ```wasm
   ;; Extract credit.amount from encoded parameter
@@ -1310,13 +1310,13 @@ The `Balanced` trait provides methods that return imbalance objects (credit/debt
   ;; ... (same as handler 16)
   
   ;; Return Ok(())
-  call 47               ;; return_ok_unit
+  call 51               ;; return_ok_unit
   ```
 - **Note**: No authorization check in `resolve` (unlike `mint` which checks caller == owner)
 
 ##### 8.5 `settle(who: AccountId, debt: DebtImbalance, preservation: Preservation) -> Result<CreditImbalance>`
 - **Selector**: `0xC8CB2133`
-- **Handler**: Function 60, handler index 8
+- **Handler**: Function 63, handler index 8
 - **Wasm Flow**:
   ```wasm
   ;; Extract debt.amount
@@ -1334,7 +1334,7 @@ The `Balanced` trait provides methods that return imbalance objects (credit/debt
   local.get debt_amount_high
   local.get preservation
   i32.const 1           ;; Precision::BestEffort
-  call 58               ;; Delegates to transfer_with_checks/burn logic
+  call 61               ;; Delegates to transfer_with_checks/burn logic
   
   ;; Check if burn succeeded
   local.get 0
@@ -1353,7 +1353,7 @@ The `Balanced` trait provides methods that return imbalance objects (credit/debt
   
   ;; Encode Result::Ok discriminant
   i32.const 0
-  call 36
+  call 37
   
   ;; Encode CreditImbalance { remaining }
   local.get remaining_low
@@ -1361,7 +1361,7 @@ The `Balanced` trait provides methods that return imbalance objects (credit/debt
   call 27
   
   ;; Return
-  call 52
+  call 55
   ```
 - **Semantics**: Attempts to burn `debt.amount` from `who`, returns unburnable portion as `CreditImbalance`
 
@@ -1373,29 +1373,29 @@ The `Balanced` trait provides methods that return imbalance objects (credit/debt
 |-------|--------|----------|---------------|---------------|
 | **Inspect** | `total_issuance()` | `0x6AEA3206` | 1 | (state read) |
 | | `minimum_balance()` | `0xA7EAE324` | 3 | (state read) |
-| | `balance(who)` | `0x0F5C5E92` | 9 | 34, 42 |
-| | `total_balance(who)` | `0x7A2095E3` | 10 | 42, saturating add |
-| | `reducible_balance(...)` | `0x2E9A5C32` | 25 | 34, 55, 43 |
-| **Unbalanced** | `write_balance(...)` | `0xDC9A5E14` | 24 | 42, 28, 63 |
+| | `balance(who)` | `0x0F5C5E92` | 9 | 35, 46 |
+| | `total_balance(who)` | `0x7A2095E3` | 10 | 46, saturating add |
+| | `reducible_balance(...)` | `0x2E9A5C32` | 25 | 35, 58, 47 |
+| **Unbalanced** | `write_balance(...)` | `0xDC9A5E14` | 24 | 46, 28, 66 |
 | | `set_total_issuance(...)` | `0xF9A48F8E` | 19 | (state write) |
-| | `increase_balance(...)` | `0xB2E13B27` | 16 | 42, 28, 37 |
-| | `decrease_balance(...)` | `0xA194B221` | 26 | 43, 58, 28 |
-| **Mutate** | `transfer(...)` | `0xCE8F142D` | 5 | 39, 41, 58, 28 |
-| | `burn_from(...)` | `0x9EA394B1` | 27 | 43, 58, 63 |
-| **InspectHold** | `balance_on_hold(who)` | `0xA1B8F1E6` | 11 | 42 (read reserved) |
+| | `increase_balance(...)` | `0xB2E13B27` | 16 | 46, 28, 38 |
+| | `decrease_balance(...)` | `0xA194B221` | 26 | 47, 61, 28 |
+| **Mutate** | `transfer(...)` | `0xCE8F142D` | 5 | 42, 44, 61, 28 |
+| | `burn_from(...)` | `0x9EA394B1` | 27 | 47, 61, 66 |
+| **InspectHold** | `balance_on_hold(who)` | `0xA1B8F1E6` | 11 | 46 (read reserved) |
 | | `total_balance_on_hold()` | `0x33F3948D` | 21 | (state read offset 16) |
-| **MutateHold** | `hold(...)` (reserve) | `0xC1D8E627` | 22 | 42, 28, 37 |
-| | `release(...)` (unreserve) | `0xF5A8B128` | 23 | 42, 28, 37 |
-| **InspectFreeze** | `balance_frozen(who)` | `0x2F1A9DDC` | 28 | 42 (read frozen) |
-| | `can_deposit(...)` | `0xB3F881A9` | 17 | 42, overflow checks |
-| | `can_withdraw(...)` | `0xF7A8F3E1` | 18 | 42, 43 |
+| **MutateHold** | `hold(...)` (reserve) | `0xC1D8E627` | 22 | 46, 28, 38 |
+| | `release(...)` (unreserve) | `0xF5A8B128` | 23 | 46, 28, 38 |
+| **InspectFreeze** | `balance_frozen(who)` | `0x2F1A9DDC` | 28 | 46 (read frozen) |
+| | `can_deposit(...)` | `0xB3F881A9` | 17 | 46, overflow checks |
+| | `can_withdraw(...)` | `0xF7A8F3E1` | 18 | 46, 47 |
 | **MutateFreeze** | `set_freeze(...)` (set_lock) | `0xCD0F5A06` | 32 | 16, 23, 24 |
 | | `thaw(...)` (remove_lock) | `0x11A08D5C` | 33 | 16, 24, memory ops |
-| **Balanced** | `deposit(...)` | `0x05C81D55` | 6 | 42, 28, encoding |
+| **Balanced** | `deposit(...)` | `0x05C81D55` | 6 | 46, 28, encoding |
 | | `issue(...)` | `0x8B3BEC3B` | 0 | (pair creation) |
 | | `rescind(...)` | `0x55F85D0F` | 29 | (state check) |
 | | `resolve(...)` | `0x06A7D814` | 7 | 22, increase logic |
-| | `settle(...)` | `0xC8CB2133` | 8 | 58, encoding |
+| | `settle(...)` | `0xC8CB2133` | 8 | 61, encoding |
 
 ---
 
@@ -1406,12 +1406,12 @@ The `Balanced` trait provides methods that return imbalance objects (credit/debt
 ;; Example: transfer(to: AccountId, amount: Balance)
 ;; Input layout: [selector: 4] [to: 32] [amount: 16]
 
-;; Decode AccountId via function 34
+;; Decode AccountId via function 35
 local.get 0
 i32.const 208
 i32.add               ;; Result destination (33 bytes: flag + AccountId)
 local.get reader_ptr
-call 34               ;; decode_account_id
+call 35               ;; decode_account_id
 
 ;; Check success flag
 local.get 0
@@ -1449,9 +1449,9 @@ i64.load              ;; High 64 bits
 ```wasm
 ;; Example: burn_from(..., precision: Precision)
 
-;; Decode via function 56 (ternary enum) or 55 (Preservation)
+;; Decode via function 59 (ternary enum) or 58 (Preservation)
 local.get reader_ptr
-call 56               ;; decode_ternary_enum
+call 59               ;; decode_ternary_enum
 local.tee precision
 
 ;; Validate range
@@ -1459,7 +1459,7 @@ i32.const 3
 i32.ge_u
 if
   ;; Invalid discriminant
-  call 49             ;; return_err
+  call 53             ;; return_err
 end
 
 ;; Use discriminant value (0-2)
@@ -1476,12 +1476,12 @@ i32.eqz               ;; Check if Exact (0)
 ```wasm
 ;; Example: new_with_dust_trap(dust_trap: Option<AccountId>)
 
-;; Decode via function 53
+;; Decode via function 56
 local.get 0
 i32.const 208
 i32.add               ;; Result destination
 local.get reader_ptr
-call 53               ;; decode_option_account_id_full
+call 56               ;; decode_option_account_id_full
 
 ;; Check result discriminant
 local.get 0
@@ -1526,7 +1526,7 @@ Data:   SCALE(EventStruct)
 
 #### **Example: Transfer Event**
 ```wasm
-;; Function 37: emit_transfer_event
+;; Function 38: emit_transfer_event
 ;; Event: Transfer { from: Option<AccountId>, to: Option<AccountId>, value: Balance }
 
 ;; Initialize encoder at offset 52
@@ -1543,7 +1543,7 @@ i32.const 52
 i32.add
 local.tee 1
 i32.const 2
-call 33               ;; encode_compact_u32
+call 34               ;; encode_vec_length
 
 ;; Encode event signature topic
 local.get 1
@@ -1556,7 +1556,7 @@ i32.const 68
 i32.add               ;; Topics buffer state
 local.get 1           ;; Encoder
 local.get 0           ;; from AccountId ptr
-call 38               ;; build_event_topic_hash
+call 39               ;; build_event_topic_hash
 
 ;; Extract topics buffer for seal_deposit_event
 local.get 0
@@ -1567,13 +1567,13 @@ i32.load offset=72    ;; Topics ptr
 ;; Encode event data (from, to, value)
 local.get 0           ;; from Option<AccountId>
 local.get encoder
-call 51               ;; encode_option_account_id
+call 41               ;; encode_option_account_id
 
 local.get 0
 i32.const 33
 i32.add               ;; to Option<AccountId>
 local.get encoder
-call 51
+call 41
 
 local.get value_low
 local.get value_high

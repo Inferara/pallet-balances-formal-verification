@@ -23,15 +23,15 @@
   ;; Parameters: (self_ptr, other_ptr) -> bool/status
   (type $type_binary_op_ret_i32 (;3;) (func (param i32 i32) (result i32)))
   
-  ;; Type 4: Nullary procedure (no params, no return)
-  ;; Used for: module initialization, empty handlers, finalization
-  ;; Parameters: () -> void
-  (type $type_nullary_proc (;4;) (func))
-  
-  ;; Type 5: Single parameter procedure
+  ;; Type 4: Single parameter procedure
   ;; Used for: cleanup operations, panic handlers, initialization
   ;; Parameters: (ptr/value) -> void
-  (type $type_unary_proc (;5;) (func (param i32)))
+  (type $type_unary_proc (;4;) (func (param i32)))
+  
+  ;; Type 5: Nullary procedure (no params, no return)
+  ;; Used for: module initialization, empty handlers, finalization
+  ;; Parameters: () -> void
+  (type $type_nullary_proc (;5;) (func))
   
   ;; Type 6: Unary function with result
   ;; Used for: balance queries, type conversions, option unwrapping
@@ -163,11 +163,11 @@
   ;; Returns: Original destination pointer
   (func $memcpy_forward_loop (;9;) (type 2) (param i32 i32 i32) (result i32)
     (local i32)          ;; Local 3: loop counter
-    loop (result i32)
+    loop (result i32)    ;; label = @1
       local.get 2        ;; len
       local.get 3        ;; counter
       i32.eq
-      if (result i32)    ;; if counter == len, done
+      if (result i32)    ;; label = @2 - if counter == len, done
         local.get 0      ;; return dest
       else
         local.get 0
@@ -182,7 +182,7 @@
         i32.const 1
         i32.add
         local.set 3      ;; counter++
-        br 1             ;; continue loop
+        br 1 (;@1;)      ;; continue loop
       end
     end)
 
@@ -193,18 +193,18 @@
   ;; Returns: Destination pointer
   (func $memmove (;10;) (type 2) (param i32 i32 i32) (result i32)
     (local i32)          ;; Local 3: working pointer
-    block
+    block  ;; label = @1
       local.get 0        ;; dest
       local.get 1        ;; src
       i32.le_u
-      if                 ;; if dest <= src (forward copy safe)
+      if  ;; label = @2 - if dest <= src (forward copy safe)
         ;; Forward copy loop
         local.get 0
         local.set 3
-        loop
+        loop  ;; label = @3
           local.get 2    ;; len
           i32.eqz
-          br_if 2        ;; if len == 0, exit
+          br_if 2 (;@1;) ;; if len == 0, exit
           local.get 3
           local.get 1
           i32.load8_u
@@ -221,7 +221,7 @@
           i32.const 1
           i32.sub
           local.set 2
-          br 0           ;; continue
+          br 0 (;@3;)    ;; continue
         end
         unreachable
       end
@@ -234,10 +234,10 @@
       i32.const 1
       i32.sub
       local.set 1
-      loop
+      loop  ;; label = @2
         local.get 2
         i32.eqz
-        br_if 1          ;; if len == 0, exit
+        br_if 1 (;@1;)   ;; if len == 0, exit
         local.get 2
         local.get 3
         i32.add
@@ -250,7 +250,7 @@
         i32.const 1
         i32.sub
         local.set 2
-        br 0             ;; continue
+        br 0 (;@2;)      ;; continue
       end
       unreachable
     end
@@ -263,11 +263,11 @@
   ;; Returns: Destination pointer
   (func $memset_loop (;11;) (type 2) (param i32 i32 i32) (result i32)
     (local i32)          ;; Local 3: counter
-    loop (result i32)
+    loop (result i32)    ;; label = @1
       local.get 2        ;; len
       local.get 3        ;; counter
       i32.eq
-      if (result i32)
+      if (result i32)    ;; label = @2
         local.get 0      ;; return dest
       else
         local.get 0
@@ -279,7 +279,7 @@
         i32.const 1
         i32.add
         local.set 3      ;; counter++
-        br 1             ;; continue loop
+        br 1 (;@1;)      ;; continue loop
       end
     end)
 
@@ -290,10 +290,10 @@
   ;; Returns: 0 if equal, negative if ptr1 < ptr2, positive if ptr1 > ptr2
   (func $memcmp (;12;) (type 2) (param i32 i32 i32) (result i32)
     (local i32 i32)      ;; Local 3: byte1, Local 4: byte2
-    loop
+    loop  ;; label = @1
       local.get 2
       i32.eqz
-      if                 ;; if len == 0
+      if  ;; label = @2 - if len == 0
         i32.const 0
         return           ;; regions are equal
       end
@@ -318,7 +318,7 @@
       local.get 3
       local.get 4
       i32.eq             ;; if bytes equal
-      br_if 0            ;; continue loop
+      br_if 0 (;@1;)     ;; continue loop
     end
     local.get 4          ;; byte1
     local.get 3          ;; byte2
@@ -334,7 +334,7 @@
     local.get 1          ;; actual_len
     local.get 3          ;; expected_len
     i32.eq
-    if                   ;; if equal, perform copy
+    if  ;; label = @1 - if equal, perform copy
       local.get 0        ;; dest
       local.get 2        ;; src
       local.get 1        ;; len
@@ -365,7 +365,7 @@
     
     local.get 3
     i32.eqz
-    if                   ;; Normal read path
+    if  ;; label = @1 - Normal read path
       local.get 0
       i32.load           ;; Get reader struct pointer
       local.get 1        ;; output_ptr
@@ -406,7 +406,7 @@
     i32.lt_u
     local.tee 4          ;; underflow flag
     i32.eqz
-    if                   ;; if remaining >= bytes_to_read
+    if  ;; label = @1 - if remaining >= bytes_to_read
       ;; Perform the copy
       local.get 1        ;; dest
       local.get 2        ;; expected_len
@@ -945,7 +945,7 @@
     i32.load             ;; Load Mapping prefix
     i32.load
     local.get 1
-    call 36              ;; Encode u32 prefix
+    call 37              ;; Encode u32 prefix
     local.get 0
     i32.const 4
     i32.add
@@ -975,7 +975,7 @@
     i32.const 1
     call 15              ;; Try to read 1 byte
     local.tee 1
-    if (result i32)      ;; if failed (EOF)
+    if (result i32)      ;; label = @1 - if failed (EOF)
       i32.const 0
     else
       local.get 2
@@ -1008,7 +1008,7 @@
     i32.const 0
     i32.store offset=12
     
-    block
+    block  ;; label = @1
       ;; Try to read 4 bytes
       local.get 1
       local.get 2
@@ -1017,11 +1017,11 @@
       i32.const 4
       call 15
       i32.eqz
-      if
+      if  ;; label = @2
         local.get 2
         i32.load offset=12
         local.set 1
-        br 1
+        br 1 (;@1;)
       end
       i32.const 1
       local.set 3
@@ -1052,42 +1052,42 @@
     local.tee 3
     global.set 0
     
-    block (result i32)
+    block (result i32)  ;; label = @1
       local.get 2
       i32.load offset=4
-      if
+      if  ;; label = @2
         local.get 2
         i32.load offset=8
         local.tee 4
         i32.eqz
-        if
+        if  ;; label = @3
           ;; New allocation
           local.get 3
           i32.const 8
           i32.add
           local.get 1
-          call 64
+          call 67
           local.get 3
           i32.load offset=8
           local.set 2
           local.get 3
           i32.load offset=12
-          br 2
+          br 2 (;@1;)
         end
         
         ;; Reallocation
         local.get 2
         i32.load
         local.set 5
-        block
+        block  ;; label = @3
           local.get 1
-          call 65
+          call 68
           local.tee 2
           i32.eqz
-          if
+          if  ;; label = @4
             i32.const 0
             local.set 2
-            br 1
+            br 1 (;@3;)
           end
           local.get 2
           local.get 5
@@ -1096,13 +1096,13 @@
           drop
         end
         local.get 1
-        br 1
+        br 1 (;@1;)
       end
       
       ;; Simple allocation
       local.get 3
       local.get 1
-      call 64
+      call 67
       local.get 3
       i32.load
       local.set 2
@@ -1171,14 +1171,14 @@
     i64.const 0
     i64.store
     
-    block
+    block  ;; label = @1
       ;; Read 16 bytes
       local.get 1
       local.get 2
       i32.const 16
       call 15
       i32.eqz
-      if
+      if  ;; label = @2
         ;; Success: copy to output
         local.get 0
         local.get 2
@@ -1188,7 +1188,7 @@
         local.get 3
         i64.load
         i64.store offset=16
-        br 1
+        br 1 (;@1;)
       end
       i64.const 1
       local.set 4
@@ -1217,7 +1217,7 @@
     local.get 0
     i32.load            ;; vec.capacity
     i32.eq
-    if                   ;; if len == capacity
+    if  ;; label = @1 - if len == capacity
       ;; Grow vector
       global.get 0
       i32.const 32
@@ -1225,14 +1225,14 @@
       local.tee 2
       global.set 0
       
-      block
-        block
+      block  ;; label = @2
+        block  ;; label = @3
           local.get 0
           i32.load
           local.tee 3
           i32.const -1
           i32.eq
-          br_if 0
+          br_if 0 (;@3;)
           
           ;; Calculate new capacity (double or +1)
           i32.const 4
@@ -1261,18 +1261,18 @@
           i64.const 32
           i64.shr_u
           i32.wrap_i64
-          br_if 0
+          br_if 0 (;@3;)
           
           local.get 7
           i32.wrap_i64
           local.tee 5
           i32.const 2147483640
           i32.gt_u
-          br_if 0
+          br_if 0 (;@3;)
           
           local.get 2
           local.get 3
-          if (result i32)
+          if (result i32)  ;; label = @4
             local.get 2
             local.get 3
             i32.const 24
@@ -1303,20 +1303,20 @@
           local.get 2
           i32.load offset=8
           i32.eqz
-          if
+          if  ;; label = @4
             local.get 0
             local.get 4
             i32.store
             local.get 0
             local.get 3
             i32.store offset=4
-            br 2
+            br 2 (;@2;)
           end
           
           local.get 3
           i32.const -2147483647
           i32.eq
-          br_if 1
+          br_if 1 (;@2;)
         end
         unreachable
       end
@@ -1422,7 +1422,7 @@
     local.tee 6
     call 17
     
-    block
+    block  ;; label = @1
       local.get 3
       i32.load offset=40
       local.tee 0
@@ -1430,7 +1430,7 @@
       i32.load offset=44
       local.tee 4
       i32.lt_u
-      br_if 0
+      br_if 0 (;@1;)
       
       local.get 3
       i32.load offset=36
@@ -1459,9 +1459,9 @@
       i32.const 24
       i32.mul
       local.set 0
-      loop
+      loop  ;; label = @2
         local.get 0
-        if
+        if  ;; label = @3
           ;; Encode lock.id (8 bytes)
           local.get 3
           i32.const 36
@@ -1491,7 +1491,7 @@
           i32.const 24
           i32.add
           local.set 1
-          br 1
+          br 1 (;@2;)
         end
       end
       
@@ -1502,7 +1502,7 @@
       local.get 3
       i32.load offset=40
       i32.gt_u
-      br_if 0
+      br_if 0 (;@1;)
       
       local.get 5
       local.get 4
@@ -1536,25 +1536,25 @@
     local.tee 2
     global.set 0
     
-    block
+    block  ;; label = @1
       ;; Single-byte mode (0-63)
       local.get 0
       i32.const 63
       i32.le_u
-      if
+      if  ;; label = @2
         local.get 1
         local.get 0
         i32.const 2
         i32.shl
-        call 54
-        br 1
+        call 57
+        br 1 (;@1;)
       end
       
       ;; Two-byte mode (64-16383)
       local.get 0
       i32.const 16383
       i32.le_u
-      if
+      if  ;; label = @2
         local.get 2
         local.get 0
         i32.const 2
@@ -1568,31 +1568,31 @@
         i32.add
         i32.const 2
         call 26
-        br 1
+        br 1 (;@1;)
       end
       
       ;; Four-byte mode
       local.get 0
       i32.const 1073741823
       i32.le_u
-      if
+      if  ;; label = @2
         local.get 0
         i32.const 2
         i32.shl
         i32.const 2
         i32.or
         local.get 1
-        call 36
-        br 1
+        call 37
+        br 1 (;@1;)
       end
       
       ;; Big-integer mode
       local.get 1
       i32.const 3
-      call 54
+      call 57
       local.get 0
       local.get 1
-      call 36
+      call 37
     end
     
     local.get 2
@@ -1607,7 +1607,7 @@
   (func $encoder_write_bytes (;26;) (type 1) (param i32 i32 i32)
     (local i32 i32)
     
-    block
+    block  ;; label = @1
       ;; Calculate new position
       local.get 0
       i32.load offset=8    ;; encoder.used
@@ -1617,13 +1617,13 @@
       local.tee 4          ;; new_used
       local.get 3
       i32.lt_u
-      br_if 0              ;; Overflow check
+      br_if 0 (;@1;)       ;; Overflow check
       
       local.get 4
       local.get 0
       i32.load offset=4    ;; encoder.capacity
       i32.gt_u
-      br_if 0              ;; Capacity check
+      br_if 0 (;@1;)       ;; Capacity check
       
       ;; Copy data
       local.get 0
@@ -1735,7 +1735,7 @@
     local.tee 4
     call 17
     
-    block
+    block  ;; label = @1
       local.get 2
       i32.load offset=40
       local.tee 5
@@ -1743,7 +1743,7 @@
       i32.load offset=44
       local.tee 0
       i32.lt_u
-      br_if 0
+      br_if 0 (;@1;)
       
       local.get 2
       i32.load offset=36
@@ -1774,7 +1774,7 @@
       local.get 2
       i32.load offset=40
       i32.gt_u
-      br_if 0
+      br_if 0 (;@1;)
       
       local.get 3
       local.get 0
@@ -1978,12 +1978,12 @@
     i64.const 0
     i64.store
     
-    block
+    block  ;; label = @1
       ;; If len >= 33, hash it
       local.get 2
       i32.const 33
       i32.ge_u
-      if
+      if  ;; label = @2
         ;; Hash the key
         local.get 3
         i32.const 56
@@ -2018,7 +2018,7 @@
         local.get 1
         i32.const 32
         call 13
-        br 1
+        br 1 (;@1;)
       end
       
       ;; Direct copy if small enough
@@ -2064,11 +2064,117 @@
     i32.sub
     global.set 0)
 
-  ;; Function 33: Encode Compact<u32> length prefix for vectors
+  ;; Function 33: Encode None variant for Option<T>
+  ;; Encodes discriminant byte and empty AccountId
+  ;; Used for: Encoding None variants in event emission
+  ;; Parameters: (encoder_ptr) -> void
+  (func $encode_option_none (;33;) (type 4) (param i32)
+    (local i32 i32 i32 i32 i32 i32 i32)
+    global.get 0
+    i32.const 48
+    i32.sub
+    local.tee 1
+    global.set 0
+    
+    block  ;; label = @1
+      local.get 0
+      i32.load offset=4    ;; encoder.capacity
+      local.tee 3
+      local.get 0
+      i32.load offset=8    ;; encoder.used
+      local.tee 2
+      i32.lt_u
+      br_if 0 (;@1;)
+      
+      local.get 0
+      i32.load             ;; encoder.ptr
+      local.set 4
+      local.get 1
+      i32.const 0
+      i32.store offset=12
+      local.get 1
+      local.get 3
+      local.get 2
+      i32.sub
+      local.tee 3
+      i32.store offset=8
+      local.get 1
+      local.get 2
+      local.get 4
+      i32.add
+      local.tee 4
+      i32.store offset=4
+      
+      ;; Write discriminant byte (0)
+      local.get 1
+      i32.const 0
+      i32.store8 offset=36
+      local.get 1
+      i32.const 4
+      i32.add
+      local.tee 5
+      local.get 1
+      i32.const 36
+      i32.add
+      local.tee 6
+      i32.const 1
+      call 26
+      
+      local.get 1
+      i32.load offset=12
+      local.tee 7
+      local.get 1
+      i32.load offset=8
+      i32.gt_u
+      br_if 0 (;@1;)
+      
+      ;; Hash and encode empty AccountId
+      local.get 5
+      local.get 1
+      i32.load offset=4
+      local.get 7
+      call 32
+      
+      local.get 1
+      i32.const 0
+      i32.store offset=44
+      local.get 1
+      local.get 3
+      i32.store offset=40
+      local.get 1
+      local.get 4
+      i32.store offset=36
+      
+      local.get 5
+      local.get 6
+      call 31
+      
+      local.get 2
+      local.get 2
+      local.get 1
+      i32.load offset=44
+      i32.add
+      local.tee 2
+      i32.gt_u
+      br_if 0 (;@1;)
+      
+      local.get 0
+      local.get 2
+      i32.store offset=8
+      
+      local.get 1
+      i32.const 48
+      i32.add
+      global.set 0
+      return
+    end
+    unreachable)
+
+  ;; Function 34: Encode Compact<u32> length prefix for vectors
   ;; Wrapper around compact encoding specifically for Vec lengths
   ;; Used for: Vec<BalanceLock>, Vec<Event> serialization
   ;; Parameters: (vec_len, encoder_ptr) -> void
-  (func $encode_vec_length (;33;) (type 0) (param i32 i32)
+  (func $encode_vec_length (;34;) (type 0) (param i32 i32)
     (local i32 i32 i32 i32)
     global.get 0
     i32.const 16
@@ -2134,12 +2240,12 @@
     end
     unreachable)
 
-  ;; Function 34: Read 32-byte AccountId from buffer
+  ;; Function 35: Read 32-byte AccountId from buffer
   ;; Reads a fixed-size AccountId with success/EOF flag
   ;; Used for: Decoding AccountId parameters in messages
   ;; Parameters: (result_ptr, reader_ptr) -> void
   ;; Result: Stores (success_flag, AccountId[32]) at result_ptr
-  (func $decode_account_id (;34;) (type 0) (param i32 i32)
+  (func $decode_account_id (;35;) (type 0) (param i32 i32)
     (local i32 i32 i32 i32)
     global.get 0
     i32.const 32
@@ -2214,12 +2320,12 @@
     i32.add
     global.set 0)
 
-  ;; Function 35: Read and decode Option<AccountId> with full structure
+  ;; Function 36: Read and decode Option<AccountId> with full structure
   ;; Decodes complex Option structure with nested data
   ;; Used for: Decoding optional account parameters in complex messages
   ;; Parameters: (result_ptr, reader_ptr) -> void
   ;; Result: Stores complete decoded structure (56 bytes) at result_ptr
-  (func $decode_option_account_full (;35;) (type 0) (param i32 i32)
+  (func $decode_option_account_full (;36;) (type 0) (param i32 i32)
     (local i32)
     global.get 0
     i32.const -64
@@ -2232,7 +2338,7 @@
     i32.const 7
     i32.add
     local.get 1
-    call 34              ;; decode_account_id
+    call 35              ;; decode_account_id
     
     block  ;; label = @1
       local.get 2
@@ -2311,11 +2417,11 @@
     i32.sub
     global.set 0)
 
-  ;; Function 36: Encode u32 value to encoder
+  ;; Function 37: Encode u32 value to encoder
   ;; Writes 4-byte integer in little-endian format
   ;; Used for: Encoding counters, discriminants, Mapping prefixes
   ;; Parameters: (value_u32, encoder_ptr) -> void
-  (func $encode_u32 (;36;) (type 0) (param i32 i32)
+  (func $encode_u32 (;37;) (type 0) (param i32 i32)
     (local i32)
     global.get 0
     i32.const 16
@@ -2341,10 +2447,10 @@
     i32.add
     global.set 0)
 
-  ;; Function 37: Emit Transfer event
+  ;; Function 38: Emit Transfer event
   ;; Constructs and emits Transfer event
   ;; Parameters: (transfer_event_ptr) -> void
-  (func $emit_transfer_event (;37;) (type 5) (param i32)
+  (func $emit_transfer_event (;38;) (type 4) (param i32)
     (local i32 i32 i32 i32)
     global.get 0
     i32.const 80
@@ -2373,7 +2479,7 @@
     i32.add
     local.tee 1
     i32.const 2
-    call 33
+    call 34
     local.get 1
     i32.const 65610
     call 30
@@ -2387,9 +2493,9 @@
     local.get 0
     i32.const -64
     i32.sub
-    call 38
+    call 39
     
-    block
+    block  ;; label = @1
       local.get 0
       i32.load offset=72
       local.tee 2
@@ -2397,7 +2503,7 @@
       i32.load offset=76
       local.tee 1
       i32.lt_u
-      br_if 0
+      br_if 0 (;@1;)
       
       local.get 0
       i32.load offset=68
@@ -2436,7 +2542,7 @@
       local.get 0
       i32.load offset=72
       i32.gt_u
-      br_if 0
+      br_if 0 (;@1;)
       
       local.get 4
       local.get 1
@@ -2453,21 +2559,21 @@
     end
     unreachable)
 
-  ;; Function 38: Build event topics buffer
-  ;; Encodes AccountId, hashes it, appends to buffer
+  ;; Function 39: Build event topics buffer
+  ;; Encodes AccountId, hashes it, appends to buffer (or writes None)
   ;; Parameters: (result_ptr, encoder_ptr, account_id_ptr) -> void
-  (func $build_event_topic_hash (;38;) (type 1) (param i32 i32 i32)
-    (local i32 i32 i32 i32 i32 i32)
+  (func $build_event_topic_hash (;39;) (type 1) (param i32 i32 i32)
+    (local i32 i32 i32 i32 i32)
     global.get 0
     i32.const 48
     i32.sub
     local.tee 3
     global.set 0
     
-    block
-      block
+    block  ;; label = @1
+      block  ;; label = @2
         local.get 2
-        if
+        if  ;; label = @3
           local.get 1
           i32.load offset=4
           local.tee 5
@@ -2475,7 +2581,7 @@
           i32.load offset=8
           local.tee 4
           i32.lt_u
-          br_if 2
+          br_if 2 (;@1;)
           
           local.get 1
           i32.load
@@ -2510,7 +2616,7 @@
           local.get 3
           i32.load offset=8
           i32.gt_u
-          br_if 2
+          br_if 2 (;@1;)
           
           local.get 7
           local.get 3
@@ -2541,93 +2647,17 @@
           local.tee 2
           local.get 4
           i32.lt_u
-          br_if 2
-          br 1
+          br_if 2 (;@1;)
+          local.get 1
+          local.get 2
+          i32.store offset=8
+          br 1 (;@2;)
         end
         
+        ;; None path
         local.get 1
-        i32.load offset=4
-        local.tee 4
-        local.get 1
-        i32.load offset=8
-        local.tee 2
-        i32.lt_u
-        br_if 1
-        
-        local.get 1
-        i32.load
-        local.set 5
-        local.get 3
-        i32.const 0
-        i32.store offset=12
-        local.get 3
-        local.get 4
-        local.get 2
-        i32.sub
-        local.tee 4
-        i32.store offset=8
-        local.get 3
-        local.get 2
-        local.get 5
-        i32.add
-        local.tee 5
-        i32.store offset=4
-        
-        local.get 3
-        i32.const 0
-        i32.store8 offset=36
-        local.get 3
-        i32.const 4
-        i32.add
-        local.tee 7
-        local.get 3
-        i32.const 36
-        i32.add
-        local.tee 8
-        i32.const 1
-        call 26
-        
-        local.get 3
-        i32.load offset=12
-        local.tee 6
-        local.get 3
-        i32.load offset=8
-        i32.gt_u
-        br_if 1
-        
-        local.get 7
-        local.get 3
-        i32.load offset=4
-        local.get 6
-        call 32
-        
-        local.get 3
-        i32.const 0
-        i32.store offset=44
-        local.get 3
-        local.get 4
-        i32.store offset=40
-        local.get 3
-        local.get 5
-        i32.store offset=36
-        
-        local.get 7
-        local.get 8
-        call 31
-        
-        local.get 2
-        local.get 2
-        local.get 3
-        i32.load offset=44
-        i32.add
-        local.tee 2
-        i32.gt_u
-        br_if 1
+        call 33
       end
-      
-      local.get 1
-      local.get 2
-      i32.store offset=8
       local.get 0
       local.get 1
       i64.load align=4
@@ -2649,10 +2679,185 @@
     end
     unreachable)
 
-  ;; Function 39: Get caller AccountId from host
+  ;; Function 40: Emit complex event (Transfer with 3 topics)
+  ;; Constructs and emits event with 3 indexed topics
+  ;; Parameters: (event_struct_ptr) -> void
+  (func $emit_event_3_topics (;40;) (type 4) (param i32)
+    (local i32 i32 i32)
+    global.get 0
+    i32.const 112
+    i32.sub
+    local.tee 1
+    global.set 0
+    
+    ;; Copy event structure (88 bytes)
+    local.get 1
+    local.get 0
+    i32.const 88
+    call 9
+    local.tee 0
+    i64.const 16384
+    i64.store offset=92 align=4
+    local.get 0
+    i32.const 66280
+    i32.store offset=88
+    
+    ;; Encode topic count (3)
+    local.get 0
+    i32.const 88
+    i32.add
+    local.tee 1
+    i32.const 3
+    call 34
+    
+    ;; Encode topic 1 (event signature)
+    local.get 1
+    i32.const 65577
+    call 30
+    
+    block  ;; label = @1
+      ;; Check if topic 2 should be Some or None
+      local.get 0
+      i32.load8_u offset=16
+      i32.const 1
+      i32.eq
+      if  ;; label = @2
+        local.get 1
+        local.get 0
+        i32.const 17
+        i32.add
+        call 30
+        br 1 (;@1;)
+      end
+      local.get 0
+      i32.const 88
+      i32.add
+      call 33
+    end
+    
+    block  ;; label = @1
+      ;; Check if topic 3 should be Some or None
+      local.get 0
+      i32.load8_u offset=49
+      i32.const 1
+      i32.eq
+      if  ;; label = @2
+        local.get 0
+        i32.const 88
+        i32.add
+        local.get 0
+        i32.const 50
+        i32.add
+        call 30
+        br 1 (;@1;)
+      end
+      local.get 0
+      i32.const 88
+      i32.add
+      call 33
+    end
+    
+    block  ;; label = @1
+      local.get 0
+      i32.load offset=92
+      local.tee 2
+      local.get 0
+      i32.load offset=96
+      local.tee 1
+      i32.lt_u
+      br_if 0 (;@1;)
+      
+      local.get 0
+      i32.load offset=88
+      local.set 3
+      local.get 0
+      i32.const 0
+      i32.store offset=108
+      local.get 0
+      local.get 2
+      local.get 1
+      i32.sub
+      i32.store offset=104
+      local.get 0
+      local.get 1
+      local.get 3
+      i32.add
+      i32.store offset=100
+      
+      ;; Encode event data fields
+      local.get 0
+      i32.const 16
+      i32.add
+      local.get 0
+      i32.const 100
+      i32.add
+      local.tee 2
+      call 41
+      local.get 0
+      i32.const 49
+      i32.add
+      local.get 2
+      call 41
+      local.get 0
+      i64.load
+      local.get 0
+      i32.const 8
+      i32.add
+      i64.load
+      local.get 2
+      call 27
+      
+      local.get 0
+      i32.load offset=108
+      local.tee 2
+      local.get 0
+      i32.load offset=104
+      i32.gt_u
+      br_if 0 (;@1;)
+      
+      ;; Emit event
+      local.get 3
+      local.get 1
+      local.get 0
+      i32.load offset=100
+      local.get 2
+      call 2
+      
+      local.get 0
+      i32.const 112
+      i32.add
+      global.set 0
+      return
+    end
+    unreachable)
+
+  ;; Function 41: Encode Option<AccountId>
+  ;; Writes Option discriminant + AccountId if Some
+  ;; Parameters: (option_ptr, encoder_ptr) -> void
+  (func $encode_option_account_id (;41;) (type 0) (param i32 i32)
+    local.get 0
+    i32.load8_u
+    i32.eqz
+    if  ;; label = @1
+      local.get 1
+      i32.const 0
+      call 57
+      return
+    end
+    
+    local.get 1
+    i32.const 1
+    call 57
+    local.get 0
+    i32.const 1
+    i32.add
+    local.get 1
+    call 31)
+
+  ;; Function 42: Get caller AccountId from host
   ;; Retrieves the AccountId of the contract caller
   ;; Parameters: (output_buffer_ptr) -> void
-  (func $get_caller_account_id (;39;) (type 5) (param i32)
+  (func $get_caller_account_id (;42;) (type 4) (param i32)
     (local i32 i32 i32)
     global.get 0
     i32.const 48
@@ -2671,14 +2876,14 @@
     local.tee 2
     call 6
     
-    block
+    block  ;; label = @1
       ;; Validate size
       local.get 1
       i32.load offset=4
       local.tee 3
       i32.const 16385
       i32.ge_u
-      br_if 0
+      br_if 0 (;@1;)
       
       ;; Copy to output
       local.get 1
@@ -2691,13 +2896,13 @@
       local.get 1
       i32.const 40
       i32.add
-      call 34
+      call 35
       
       local.get 1
       i32.load8_u offset=4
       i32.const 1
       i32.eq
-      br_if 0
+      br_if 0 (;@1;)
       
       ;; Copy AccountId
       local.get 0
@@ -2741,10 +2946,10 @@
     end
     unreachable)
 
-  ;; Function 40: Check if contract was paid
+  ;; Function 43: Check if contract was paid
   ;; Reads value_transferred and checks if non-zero
   ;; Returns: 5 if no value, 4 if value sent
-  (func $check_value_transferred (;40;) (type 10) (result i32)
+  (func $check_value_transferred (;43;) (type 10) (result i32)
     (local i32 i32 i64 i64)
     global.get 0
     i32.const 32
@@ -2778,7 +2983,7 @@
     i32.load offset=28
     i32.const 17
     i32.ge_u
-    if
+    if  ;; label = @1
       unreachable
     end
     
@@ -2803,24 +3008,34 @@
     i64.eqz
     select)
 
-  ;; Function 41: Compare two AccountIds
-  ;; Wrapper around memcmp for AccountId equality
+  ;; Function 44: Compare two AccountIds (not equal)
+  ;; Wrapper around memcmp for AccountId inequality
   ;; Parameters: (account_id1, account_id2) -> bool
   ;; Returns: 1 if different, 0 if equal
-  (func $account_id_ne (;41;) (type 3) (param i32 i32) (result i32)
+  (func $account_id_ne (;44;) (type 3) (param i32 i32) (result i32)
+    local.get 0
+    local.get 1
+    call 45
+    i32.const 1
+    i32.xor)
+
+  ;; Function 45: Compare two AccountIds (equal)
+  ;; Wrapper around memcmp for AccountId equality
+  ;; Parameters: (account_id1, account_id2) -> bool
+  ;; Returns: 1 if equal, 0 if different
+  (func $account_id_eq (;45;) (type 3) (param i32 i32) (result i32)
     local.get 0
     local.get 1
     i32.const 32
     call 12
-    i32.const 0
-    i32.ne)
+    i32.eqz)
 
-  ;; Function 42: Read AccountData from storage (internal helper)
+  ;; Function 46: Read AccountData from storage (internal helper)
   ;; Loads account balance data from contract storage, returns zeroed data if not found
   ;; Used for: All balance queries and modifications
   ;; Parameters: (result_ptr, account_id_ptr) -> void
   ;; Result: Writes 48-byte AccountData struct to result_ptr
-  (func $read_account_from_storage (;42;) (type 0) (param i32 i32)
+  (func $read_account_from_storage (;46;) (type 0) (param i32 i32)
     (local i32 i32 i32 i32 i64 i64 i64 i64 i64)
     global.get 0
     i32.const 80
@@ -3044,10 +3259,10 @@
     i32.add
     global.set 0)
 
-  ;; Function 43: Calculate reducible balance
+  ;; Function 47: Calculate reducible balance
   ;; Computes maximum balance that can be reduced
   ;; Parameters: (result_ptr, amount_low, amount_high, account_data_ptr, preserve_flag) -> void
-  (func $calculate_reducible_balance (;43;) (type 11) (param i32 i64 i64 i32 i32)
+  (func $calculate_reducible_balance (;47;) (type 11) (param i32 i64 i64 i32 i32)
     (local i64 i64 i64 i64 i32)
     global.get 0
     i32.const 48
@@ -3058,7 +3273,7 @@
     ;; Load account data
     local.get 9
     local.get 3
-    call 42
+    call 46
     
     ;; Calculate free - frozen
     local.get 0
@@ -3150,10 +3365,10 @@
     i32.add
     global.set 0)
 
-  ;; Function 44: Read 4-byte selector from input
+  ;; Function 48: Read 4-byte selector from input
   ;; Reads message selector (4 bytes)
   ;; Parameters: (reader_ptr, output_ptr) -> error_flag
-  (func $read_selector (;44;) (type 3) (param i32 i32) (result i32)
+  (func $read_selector (;48;) (type 3) (param i32 i32) (result i32)
     ;; Zero output
     local.get 1
     i32.const 0
@@ -3164,10 +3379,10 @@
     i32.const 4
     call 15)
 
-  ;; Function 45: Encode Result and return
+  ;; Function 49: Encode Result and return
   ;; Encodes Result<(), Error> and calls seal_return
   ;; Parameters: (return_value_ptr, error_discriminant) -> never
-  (func $encode_and_return_result (;45;) (type 0) (param i32 i32)
+  (func $encode_and_return_result (;49;) (type 0) (param i32 i32)
     (local i32)
     ;; Prepare return buffer
     i32.const 66280
@@ -3182,7 +3397,7 @@
     i32.and
     i32.const 7
     i32.ne
-    if (result i32)
+    if (result i32)  ;; label = @1
       i32.const 66282
       local.get 1
       i32.store8
@@ -3196,13 +3411,13 @@
     
     local.get 0
     local.get 2
-    call 52
+    call 55
     unreachable)
 
-  ;; Function 46: Return u128 value to caller
+  ;; Function 50: Return u128 value to caller
   ;; Encodes Result<u128> and returns
   ;; Parameters: (value_low, value_high) -> never
-  (func $return_u128_result (;46;) (type 12) (param i64 i64)
+  (func $return_u128_result (;50;) (type 12) (param i64 i64)
     (local i32)
     global.get 0
     i32.const 16
@@ -3233,31 +3448,31 @@
     local.tee 2
     i32.const 16385
     i32.ge_u
-    if
+    if  ;; label = @1
       unreachable
     end
     
     i32.const 0
     local.get 2
-    call 52
+    call 55
     unreachable)
 
-  ;; Function 47: Return success (Ok(())) to caller
+  ;; Function 51: Return success (Ok(())) to caller
   ;; Shortcut for returning successful unit result
   ;; Parameters: () -> never
-  (func $return_ok_unit (;47;) (type 4)
+  (func $return_ok_unit (;51;) (type 5)
     i32.const 66280
     i32.const 0
     i32.store16 align=1
     i32.const 0
     i32.const 2
-    call 52
+    call 55
     unreachable)
 
-  ;; Function 48: Return error result
+  ;; Function 52: Return error result
   ;; Encodes Result<Error> and returns
   ;; Parameters: (result_ptr, error_struct_ptr) -> never
-  (func $return_result_error (;48;) (type 0) (param i32 i32)
+  (func $return_result_error (;52;) (type 0) (param i32 i32)
     (local i32 i32 i32)
     global.get 0
     i32.const 16
@@ -3275,14 +3490,14 @@
     i32.const 2
     local.set 3
     
-    block
-      block (result i32)
+    block  ;; label = @1
+      block (result i32)  ;; label = @2
         local.get 1
         i32.load8_u
         local.tee 4
         i32.const 2
         i32.ne
-        if
+        if  ;; label = @3
           i32.const 66280
           i32.const 0
           i32.store8
@@ -3290,7 +3505,7 @@
           local.get 4
           i32.const 1
           i32.and
-          if
+          if  ;; label = @4
             i32.const 66281
             i32.const 1
             i32.store8
@@ -3300,7 +3515,7 @@
             i32.const 3
             local.set 3
             i32.const 66282
-            br 2
+            br 2 (;@2;)
           end
           
           local.get 2
@@ -3326,7 +3541,7 @@
           local.tee 3
           i32.const 16385
           i32.lt_u
-          br_if 2
+          br_if 2 (;@1;)
           unreachable
         end
         
@@ -3343,25 +3558,25 @@
     
     local.get 0
     local.get 3
-    call 52
+    call 55
     unreachable)
 
-  ;; Function 49: Return error (shortcut)
+  ;; Function 53: Return error (shortcut)
   ;; Returns generic error result
   ;; Parameters: () -> never
-  (func $return_err (;49;) (type 4)
+  (func $return_err (;53;) (type 5)
     i32.const 66280
     i32.const 257
     i32.store16 align=1
     i32.const 1
     i32.const 2
-    call 52
+    call 55
     unreachable)
 
-  ;; Function 50: Encode and return AccountData
+  ;; Function 54: Encode and return AccountData
   ;; Encodes full AccountData and returns
   ;; Parameters: (account_data_ptr) -> never
-  (func $return_account_data (;50;) (type 5) (param i32)
+  (func $return_account_data (;54;) (type 4) (param i32)
     (local i32 i32 i32 i32 i32)
     global.get 0
     i32.const 16
@@ -3383,9 +3598,9 @@
     i32.const 4
     i32.add
     local.tee 2
-    call 36
+    call 37
     
-    block
+    block  ;; label = @1
       local.get 1
       i32.load offset=8
       local.tee 5
@@ -3393,7 +3608,7 @@
       i32.load offset=12
       local.tee 3
       i32.lt_u
-      br_if 0
+      br_if 0 (;@1;)
       
       local.get 1
       i32.load offset=4
@@ -3444,7 +3659,7 @@
       local.get 0
       i32.load offset=80
       local.get 2
-      call 36
+      call 37
       
       local.get 0
       i32.const 48
@@ -3456,7 +3671,7 @@
       i32.const 84
       i32.add
       local.get 2
-      call 51
+      call 41
       
       local.get 1
       i32.load offset=12
@@ -3464,7 +3679,7 @@
       local.get 1
       i32.load offset=8
       i32.gt_u
-      br_if 0
+      br_if 0 (;@1;)
       
       local.get 4
       local.get 3
@@ -3482,43 +3697,20 @@
     end
     unreachable)
 
-  ;; Function 51: Encode Option<AccountId>
-  ;; Writes Option discriminant + AccountId if Some
-  ;; Parameters: (option_ptr, encoder_ptr) -> void
-  (func $encode_option_account_id (;51;) (type 0) (param i32 i32)
-    local.get 0
-    i32.load8_u
-    i32.eqz
-    if
-      local.get 1
-      i32.const 0
-      call 54
-      return
-    end
-    
-    local.get 1
-    i32.const 1
-    call 54
-    local.get 0
-    i32.const 1
-    i32.add
-    local.get 1
-    call 31)
-
-  ;; Function 52: seal_return wrapper
+  ;; Function 55: seal_return wrapper
   ;; Calls seal_return to exit contract
   ;; Parameters: (flags, data_len) -> never
-  (func $seal_return_wrapper (;52;) (type 0) (param i32 i32)
+  (func $seal_return_wrapper (;55;) (type 0) (param i32 i32)
     local.get 0
     i32.const 66280
     local.get 1
     call 5
     unreachable)
 
-  ;; Function 53: Decode Option<AccountId> from input buffer
+  ;; Function 56: Decode Option<AccountId> from input buffer
   ;; Reads Option discriminant and AccountId if present
   ;; Parameters: (result_ptr, reader_ptr) -> void
-  (func $decode_option_account_id_full (;53;) (type 0) (param i32 i32)
+  (func $decode_option_account_id_full (;56;) (type 0) (param i32 i32)
     (local i32 i32)
     global.get 0
     i32.const 48
@@ -3536,20 +3728,20 @@
     i32.const 2
     local.set 3
     
-    block
+    block  ;; label = @1
       local.get 2
       i32.load8_u offset=8
-      br_if 0
+      br_if 0 (;@1;)
       
-      block
-        block
+      block  ;; label = @2
+        block  ;; label = @3
           local.get 2
           i32.load8_u offset=9
-          br_table 0 1 2
+          br_table 0 (;@3;) 1 (;@2;) 2 (;@1;)
         end
         i32.const 0
         local.set 3
-        br 1
+        br 1 (;@1;)
       end
       
       ;; Read AccountId
@@ -3557,10 +3749,10 @@
       i32.const 15
       i32.add
       local.get 1
-      call 34
+      call 35
       local.get 2
       i32.load8_u offset=15
-      br_if 0
+      br_if 0 (;@1;)
       
       local.get 0
       local.get 2
@@ -3603,10 +3795,10 @@
     i32.add
     global.set 0)
 
-  ;; Function 54: Write single byte to encoder
+  ;; Function 57: Write single byte to encoder
   ;; Low-level encoder operation
   ;; Parameters: (encoder_ptr, byte_value) -> void
-  (func $encoder_write_byte (;54;) (type 0) (param i32 i32)
+  (func $encoder_write_byte (;57;) (type 0) (param i32 i32)
     (local i32)
     local.get 0
     i32.load offset=8
@@ -3614,7 +3806,7 @@
     local.get 0
     i32.load offset=4
     i32.lt_u
-    if
+    if  ;; label = @1
       local.get 0
       local.get 2
       i32.const 1
@@ -3630,10 +3822,10 @@
     end
     unreachable)
 
-  ;; Function 55: Decode Preservation enum
+  ;; Function 58: Decode Preservation enum
   ;; Reads enum discriminant (0-2)
   ;; Parameters: (reader_ptr) -> value
-  (func $decode_preservation (;55;) (type 6) (param i32) (result i32)
+  (func $decode_preservation (;58;) (type 6) (param i32) (result i32)
     (local i32 i32)
     global.get 0
     i32.const 16
@@ -3672,10 +3864,10 @@
     local.get 2
     select)
 
-  ;; Function 56: Decode ternary enum (Precision/Fortitude)
+  ;; Function 59: Decode ternary enum (Precision/Fortitude)
   ;; Reads enum with 3 variants
   ;; Parameters: (reader_ptr) -> value
-  (func $decode_ternary_enum (;56;) (type 6) (param i32) (result i32)
+  (func $decode_ternary_enum (;59;) (type 6) (param i32) (result i32)
     (local i32 i32)
     global.get 0
     i32.const 16
@@ -3711,10 +3903,10 @@
     local.get 2
     select)
 
-  ;; Function 57: Deposit into account with checks
+  ;; Function 60: Deposit into account with checks
   ;; Increases account balance with validation
   ;; Parameters: (account_data_ptr, flags, amount_low, amount_high) -> result_code
-  (func $deposit_into_account (;57;) (type 13) (param i32 i32 i64 i64) (result i32)
+  (func $deposit_into_account (;60;) (type 13) (param i32 i32 i64 i64) (result i32)
     (local i32 i32 i32 i64 i64 i64 i64 i64 i64 i64)
     global.get 0
     i32.const 128
@@ -3724,17 +3916,17 @@
     
     ;; Get caller
     local.get 4
-    call 39
+    call 42
     
-    block
+    block  ;; label = @1
       ;; Check authorization
       local.get 4
       local.get 0
       i32.const 48
       i32.add
-      call 41
+      call 44
       i32.eqz
-      if
+      if  ;; label = @2
         i32.const 7
         local.set 5
 
@@ -3743,7 +3935,7 @@
         local.get 3
         i64.or
         i64.eqz
-        br_if 1
+        br_if 1 (;@1;)
         i32.const 4
         local.set 5
         
@@ -3774,7 +3966,7 @@
         local.get 8
         i64.eq
         select
-        br_if 1
+        br_if 1 (;@1;)
         
         local.get 0
         local.get 11
@@ -3810,7 +4002,7 @@
         local.get 9
         i64.eq
         select
-        br_if 1
+        br_if 1 (;@1;)
         
         local.get 0
         local.get 10
@@ -3824,9 +4016,9 @@
         i32.const 32
         i32.add
         local.get 1
-        call 42
+        call 46
         
-        block
+        block  ;; label = @2
           ;; If account already exists, skip ED check
           local.get 4
           i64.load offset=32
@@ -3839,7 +4031,7 @@
           i64.or
           i64.const 0
           i64.ne
-          br_if 0
+          br_if 0 (;@2;)
           
           ;; Check ED requirement
           local.get 0
@@ -3857,7 +4049,7 @@
           local.get 13
           i64.eq
           select
-          br_if 0
+          br_if 0 (;@2;)
           
           ;; Revert changes
           local.get 0
@@ -3928,7 +4120,7 @@
           i64.store
           i32.const 1
           local.set 5
-          br 2
+          br 2 (;@1;)
         end
         
         ;; Check total overflow
@@ -3954,7 +4146,7 @@
         select
         i32.const 1
         i32.eq
-        br_if 1
+        br_if 1 (;@1;)
         local.get 4
         local.get 7
         i64.store offset=32
@@ -4007,7 +4199,7 @@
         local.get 4
         i32.const 80
         i32.add
-        call 37
+        call 38
         i32.const 7
         local.set 5
         br 1 (;@1;)
@@ -4021,24 +4213,24 @@
     global.set 0
     local.get 5)
 
-  ;; Function 58: Transfer with preservation checks
+  ;; Function 61: Transfer with preservation checks
   ;; Implements full transfer logic
   ;; Parameters: (result_ptr, from_ptr, to_ptr, amount_low, amount_high, preservation, fortitude) -> void
-  (func $transfer_with_checks (;58;) (type 14) (param i32 i32 i32 i64 i64 i32 i32)
-    (local i32 i32 i64 i64 i64 i64)
+  (func $transfer_with_checks (;61;) (type 14) (param i32 i32 i32 i64 i64 i32 i32)
+    (local i32 i32 i64 i64 i64 i64 i64 i64)
     global.get 0
     i32.const 128
     i32.sub
     local.tee 7
     global.set 0
     
-    block
+    block  ;; label = @1
       ;; Check zero amount
       local.get 3
       local.get 4
       i64.or
       i64.eqz
-      if
+      if  ;; label = @2
         local.get 0
         i64.const 0
         i64.store offset=16
@@ -4048,13 +4240,13 @@
         local.get 0
         i32.const 0
         i32.store8
-        br 1
+        br 1 (;@1;)
       end
       
       ;; Load sender account
       local.get 7
       local.get 2
-      call 42
+      call 46
       
       ;; Calculate reducible balance
       local.get 7
@@ -4062,7 +4254,7 @@
       i32.add
       local.get 1
       i64.load offset=32
-      local.tee 12
+      local.tee 13
       local.get 1
       i32.const 40
       i32.add
@@ -4070,7 +4262,7 @@
       local.tee 11
       local.get 2
       local.get 5
-      call 43
+      call 47
       
       local.get 7
       i32.const 56
@@ -4091,203 +4283,188 @@
                 block  ;; label = @7
                   block  ;; label = @8
                     block  ;; label = @9
-                      block  ;; label = @10
-                        local.get 6
-                        i32.eqz
-                        if  ;; label = @11
-                          local.get 3
-                          local.get 10
-                          i64.le_u
-                          local.get 4
-                          local.get 9
-                          i64.le_u
-                          local.get 4
-                          local.get 9
-                          i64.eq
-                          select
-                          br_if 1 (;@10;)
-                          local.get 3
-                          i64.const 0
-                          local.get 7
-                          i64.load
-                          local.tee 3
-                          local.get 7
-                          i64.load offset=32
-                          local.tee 10
-                          i64.sub
-                          local.tee 9
-                          local.get 3
-                          local.get 9
-                          i64.lt_u
-                          local.get 7
-                          i32.const 8
-                          i32.add
-                          i64.load
-                          local.tee 9
-                          local.get 7
-                          i32.const 40
-                          i32.add
-                          i64.load
-                          i64.sub
-                          local.get 3
-                          local.get 10
-                          i64.lt_u
-                          i64.extend_i32_u
-                          i64.sub
-                          local.tee 3
-                          local.get 9
-                          i64.gt_u
-                          local.get 3
-                          local.get 9
-                          i64.eq
-                          select
-                          local.tee 1
-                          select
-                          i64.gt_u
-                          i64.const 0
-                          local.get 3
-                          local.get 1
-                          select
-                          local.tee 3
-                          local.get 4
-                          i64.lt_u
-                          local.get 3
-                          local.get 4
-                          i64.eq
-                          select
-                          i32.eqz
-                          br_if 2 (;@9;)
-                          local.get 0
-                          i32.const 0
-                          i32.store8 offset=1
-                          br 7 (;@4;)
-                        end
-                        local.get 9
-                        local.get 10
-                        i64.or
-                        i64.eqz
-                        br_if 2 (;@8;)
-                        local.get 4
-                        local.get 9
+                      local.get 6
+                      i32.eqz
+                      if  ;; label = @10
                         local.get 3
                         local.get 10
-                        i64.lt_u
+                        i64.le_u
                         local.get 4
                         local.get 9
-                        i64.lt_u
+                        i64.le_u
                         local.get 4
                         local.get 9
                         i64.eq
                         select
-                        local.tee 6
-                        select
-                        local.set 4
+                        br_if 1 (;@9;)
+                        local.get 3
+                        i64.const 0
+                        local.get 7
+                        i64.load
+                        local.tee 3
+                        local.get 7
+                        i64.load offset=32
+                        local.tee 10
+                        i64.sub
+                        local.tee 9
+                        local.get 3
+                        local.get 9
+                        i64.lt_u
+                        local.get 7
+                        i32.const 8
+                        i32.add
+                        i64.load
+                        local.tee 9
+                        local.get 7
+                        i32.const 40
+                        i32.add
+                        i64.load
+                        i64.sub
                         local.get 3
                         local.get 10
-                        local.get 6
+                        i64.lt_u
+                        i64.extend_i32_u
+                        i64.sub
+                        local.tee 3
+                        local.get 9
+                        i64.gt_u
+                        local.get 3
+                        local.get 9
+                        i64.eq
                         select
-                        local.set 3
+                        local.tee 1
+                        select
+                        i64.gt_u
+                        i64.const 0
+                        local.get 3
+                        local.get 1
+                        select
+                        local.tee 3
+                        local.get 4
+                        i64.lt_u
+                        local.get 3
+                        local.get 4
+                        i64.eq
+                        select
+                        i32.eqz
+                        br_if 2 (;@8;)
+                        local.get 0
+                        i32.const 0
+                        i32.store8 offset=1
+                        br 6 (;@4;)
                       end
-                      local.get 7
-                      i64.load
-                      local.tee 10
-                      local.get 3
-                      i64.lt_u
-                      local.tee 6
-                      local.get 7
-                      i32.const 8
-                      i32.add
-                      i64.load
-                      local.tee 9
-                      local.get 4
-                      i64.lt_u
-                      local.get 4
                       local.get 9
-                      i64.eq
-                      select
-                      br_if 3 (;@6;)
-                      i32.const 0
-                      local.get 5
-                      i32.const 255
-                      i32.and
-                      local.get 3
                       local.get 10
-                      i64.xor
-                      local.get 4
-                      local.get 9
-                      i64.xor
                       i64.or
                       i64.eqz
-                      local.get 10
-                      local.get 3
-                      i64.sub
-                      local.tee 10
-                      local.get 12
-                      i64.ge_u
-                      local.get 9
+                      br_if 2 (;@7;)
                       local.get 4
-                      i64.sub
-                      local.get 6
-                      i64.extend_i32_u
-                      i64.sub
-                      local.tee 9
-                      local.get 11
-                      i64.ge_u
                       local.get 9
-                      local.get 11
+                      local.get 3
+                      local.get 10
+                      i64.lt_u
+                      local.get 4
+                      local.get 9
+                      i64.lt_u
+                      local.get 4
+                      local.get 9
                       i64.eq
                       select
-                      i32.or
-                      local.tee 6
+                      local.tee 5
                       select
-                      br_if 4 (;@5;)
-                      local.get 7
+                      local.set 4
+                      local.get 3
                       local.get 10
-                      i64.store
-                      local.get 7
-                      local.get 9
-                      i64.store offset=8
-                      local.get 6
-                      i32.eqz
-                      br_if 2 (;@7;)
-                      br 7 (;@2;)
+                      local.get 5
+                      select
+                      local.set 3
                     end
-                    local.get 0
-                    i32.const 3
-                    i32.store8 offset=1
-                    br 4 (;@4;)
+                    local.get 7
+                    i64.load
+                    local.tee 10
+                    local.get 3
+                    i64.lt_u
+                    local.tee 5
+                    local.get 7
+                    i32.const 8
+                    i32.add
+                    i64.load
+                    local.tee 9
+                    local.get 4
+                    i64.lt_u
+                    local.get 4
+                    local.get 9
+                    i64.eq
+                    select
+                    br_if 3 (;@5;)
+                    local.get 7
+                    local.get 10
+                    local.get 3
+                    i64.sub
+                    local.tee 14
+                    i64.store
+                    local.get 7
+                    local.get 9
+                    local.get 4
+                    i64.sub
+                    local.get 5
+                    i64.extend_i32_u
+                    i64.sub
+                    local.tee 12
+                    i64.store offset=8
+                    local.get 3
+                    local.get 10
+                    i64.xor
+                    local.get 4
+                    local.get 9
+                    i64.xor
+                    i64.or
+                    i64.eqz
+                    br_if 6 (;@2;)
+                    local.get 13
+                    local.get 14
+                    i64.gt_u
+                    local.get 11
+                    local.get 12
+                    i64.gt_u
+                    local.get 11
+                    local.get 12
+                    i64.eq
+                    select
+                    br_if 2 (;@6;)
+                    br 6 (;@2;)
                   end
                   local.get 0
-                  i64.const 0
-                  i64.store offset=16
-                  local.get 0
-                  i64.const 0
-                  i64.store offset=8
-                  i32.const 0
-                  br 4 (;@3;)
+                  i32.const 3
+                  i32.store8 offset=1
+                  br 3 (;@4;)
                 end
-                local.get 1
-                local.get 2
-                local.get 7
-                call 63
-                i32.const 255
-                i32.and
-                local.tee 5
-                i32.const 7
-                i32.eq
-                br_if 4 (;@2;)
                 local.get 0
-                local.get 5
-                i32.store8 offset=1
-                br 2 (;@4;)
+                i64.const 0
+                i64.store offset=16
+                local.get 0
+                i64.const 0
+                i64.store offset=8
+                i32.const 0
+                br 3 (;@3;)
               end
+              local.get 1
+              local.get 2
+              local.get 7
+              call 66
+              i32.const 255
+              i32.and
+              local.tee 5
+              i32.const 7
+              i32.eq
+              br_if 3 (;@2;)
               local.get 0
-              i32.const 0
+              local.get 5
               i32.store8 offset=1
               br 1 (;@4;)
             end
             local.get 0
-            i32.const 3
+            i32.const 0
             i32.store8 offset=1
           end
           i32.const 1
@@ -4429,7 +4606,7 @@
       i32.add
       local.tee 1
       i32.const 2
-      call 33
+      call 34
       local.get 1
       i32.const 65808
       call 30
@@ -4441,7 +4618,7 @@
       local.get 7
       i32.const 112
       i32.add
-      call 38
+      call 39
       block  ;; label = @2
         local.get 7
         i32.load offset=120
@@ -4509,13 +4686,13 @@
     i32.add
     global.set 0)
 
-  ;; Function 59: Check if transfer is allowed
+  ;; Function 62: Check if transfer is allowed
   ;; Validates balance operation
   ;; Parameters: (config_ptr, account_ptr, flags, amount_low, amount_high, mode) -> result
-  (func $check_transfer_allowed (;59;) (type 15) (param i32 i32 i32 i64 i64 i32) (result i32)
+  (func $check_transfer_allowed (;62;) (type 15) (param i32 i32 i32 i64 i64 i32) (result i32)
     (local i32 i32 i64 i64 i64 i64 i64 i64 i64)
     global.get 0
-    i32.const 208
+    i32.const 192
     i32.sub
     local.tee 6
     global.set 0
@@ -4523,78 +4700,161 @@
     i32.const 7
     local.set 7
     
-    block
+    block  ;; label = @1
       ;; Quick zero check
       local.get 3
       local.get 4
       i64.or
       i64.eqz
-      br_if 0
+      br_if 0 (;@1;)
       
-      ;; Load accounts
-      local.get 6
-      local.get 1
-      call 42
-      
-      local.get 6
-      i32.const 48
-      i32.add
-      local.get 2
-      call 42
-      
-      ;; Perform checks
-      i64.const 0
-      local.get 6
-      i64.load
-      local.tee 10
-      local.get 6
-      i64.load offset=32
-      local.tee 9
-      i64.sub
-      local.tee 8
-      local.get 8
-      local.get 10
-      i64.gt_u
-      local.get 6
-      i32.const 8
-      i32.add
-      i64.load
-      local.tee 8
-      local.get 6
-      i32.const 40
-      i32.add
-      i64.load
-      i64.sub
-      local.get 9
-      local.get 10
-      i64.gt_u
-      i64.extend_i32_u
-      i64.sub
-      local.tee 9
-      local.get 8
-      i64.gt_u
-      local.get 8
-      local.get 9
-      i64.eq
-      select
-      local.tee 7
-      select
-      local.get 3
-      i64.lt_u
-      i64.const 0
-      local.get 9
-      local.get 7
-      select
-      local.tee 9
-      local.get 4
-      i64.lt_u
-      local.get 4
-      local.get 9
-      i64.eq
-      select
-      if  ;; label = @2
-        i32.const 2
-        local.set 7
+      block  ;; label = @2
+        local.get 1
+        local.get 2
+        call 45
+        i32.eqz
+        if  ;; label = @3
+          ;; Load accounts
+          local.get 6
+          i32.const 8
+          i32.add
+          local.get 1
+          call 46
+          
+          local.get 6
+          i32.const 56
+          i32.add
+          local.get 2
+          call 46
+          
+          ;; Perform checks
+          i64.const 0
+          local.get 6
+          i64.load offset=8
+          local.tee 10
+          local.get 6
+          i64.load offset=40
+          local.tee 9
+          i64.sub
+          local.tee 8
+          local.get 8
+          local.get 10
+          i64.gt_u
+          local.get 6
+          i32.const 16
+          i32.add
+          i64.load
+          local.tee 8
+          local.get 6
+          i32.const 48
+          i32.add
+          i64.load
+          i64.sub
+          local.get 9
+          local.get 10
+          i64.gt_u
+          i64.extend_i32_u
+          i64.sub
+          local.tee 9
+          local.get 8
+          i64.gt_u
+          local.get 8
+          local.get 9
+          i64.eq
+          select
+          local.tee 7
+          select
+          local.get 3
+          i64.lt_u
+          i64.const 0
+          local.get 9
+          local.get 7
+          select
+          local.tee 9
+          local.get 4
+          i64.lt_u
+          local.get 4
+          local.get 9
+          i64.eq
+          select
+          i32.eqz
+          br_if 1 (;@2;)
+          i32.const 2
+          local.set 7
+          br 2 (;@1;)
+        end
+        local.get 6
+        i32.const 129
+        i32.add
+        local.get 1
+        i32.const 8
+        i32.add
+        i64.load align=1
+        i64.store align=1
+        local.get 6
+        i32.const 137
+        i32.add
+        local.get 1
+        i32.const 16
+        i32.add
+        i64.load align=1
+        i64.store align=1
+        local.get 6
+        i32.const 145
+        i32.add
+        local.get 1
+        i32.const 24
+        i32.add
+        i64.load align=1
+        i64.store align=1
+        local.get 6
+        i32.const 162
+        i32.add
+        local.get 2
+        i32.const 8
+        i32.add
+        i64.load align=1
+        i64.store align=2
+        local.get 6
+        i32.const 170
+        i32.add
+        local.get 2
+        i32.const 16
+        i32.add
+        i64.load align=1
+        i64.store align=2
+        local.get 6
+        i32.const 178
+        i32.add
+        local.get 2
+        i32.const 24
+        i32.add
+        i64.load align=1
+        i64.store align=2
+        local.get 6
+        i32.const 1
+        i32.store8 offset=120
+        local.get 6
+        i32.const 1
+        i32.store8 offset=153
+        local.get 6
+        local.get 1
+        i64.load align=1
+        i64.store offset=121 align=1
+        local.get 6
+        local.get 2
+        i64.load align=1
+        i64.store offset=154 align=2
+        local.get 6
+        local.get 4
+        i64.store offset=112
+        local.get 6
+        local.get 3
+        i64.store offset=104
+        local.get 6
+        i32.const 104
+        i32.add
+        call 40
         br 1 (;@1;)
       end
       block  ;; label = @2
@@ -4603,48 +4863,12 @@
             local.get 5
             i32.const 255
             i32.and
-            if  ;; label = @5
-              local.get 3
-              local.get 10
-              i64.gt_u
-              local.tee 7
-              local.get 4
-              local.get 8
-              i64.gt_u
-              local.get 4
-              local.get 8
-              i64.eq
-              select
-              br_if 1 (;@4;)
-              local.get 0
-              i64.load offset=32
-              local.get 10
-              local.get 3
-              i64.sub
-              i64.gt_u
-              local.get 8
-              local.get 4
-              i64.sub
-              local.get 7
-              i64.extend_i32_u
-              i64.sub
-              local.tee 9
-              local.get 0
-              i32.const 40
-              i32.add
-              i64.load
-              local.tee 11
-              i64.lt_u
-              local.get 9
-              local.get 11
-              i64.eq
-              select
-              br_if 3 (;@2;)
-            end
+            i32.eqz
+            br_if 0 (;@4;)
             local.get 3
             local.get 10
             i64.gt_u
-            local.tee 7
+            local.tee 5
             local.get 4
             local.get 8
             i64.gt_u
@@ -4652,278 +4876,234 @@
             local.get 8
             i64.eq
             select
-            i32.eqz
             br_if 1 (;@3;)
+            local.get 0
+            i64.load offset=32
+            local.get 10
+            local.get 3
+            i64.sub
+            i64.gt_u
+            local.get 8
+            local.get 4
+            i64.sub
+            local.get 5
+            i64.extend_i32_u
+            i64.sub
+            local.tee 9
+            local.get 0
+            i32.const 40
+            i32.add
+            i64.load
+            local.tee 11
+            i64.lt_u
+            local.get 9
+            local.get 11
+            i64.eq
+            select
+            i32.eqz
+            br_if 0 (;@4;)
+            i32.const 3
+            local.set 7
+            br 3 (;@1;)
           end
-          i32.const 0
-          local.set 7
-          br 2 (;@1;)
-        end
-        local.get 6
-        local.get 10
-        local.get 3
-        i64.sub
-        local.tee 13
-        i64.store
-        local.get 6
-        local.get 8
-        local.get 4
-        i64.sub
-        local.get 7
-        i64.extend_i32_u
-        i64.sub
-        local.tee 9
-        i64.store offset=8
-        local.get 6
-        i64.load offset=48
-        local.tee 11
-        local.get 3
-        i64.add
-        local.tee 14
-        local.get 11
-        i64.lt_u
-        local.tee 7
-        local.get 7
-        i64.extend_i32_u
-        local.get 6
-        i32.const 56
-        i32.add
-        i64.load
-        local.tee 11
-        local.get 4
-        i64.add
-        i64.add
-        local.tee 12
-        local.get 11
-        i64.lt_u
-        local.get 11
-        local.get 12
-        i64.eq
-        select
-        if  ;; label = @3
-          i32.const 4
-          local.set 7
-          br 2 (;@1;)
-        end
-        local.get 6
-        local.get 14
-        i64.store offset=48
-        local.get 6
-        local.get 12
-        i64.store offset=56
-        block  ;; label = @3
           local.get 3
           local.get 10
-          i64.xor
+          i64.gt_u
+          local.tee 5
           local.get 4
           local.get 8
-          i64.xor
-          i64.or
-          i64.eqz
-          br_if 0 (;@3;)
-          local.get 13
-          local.get 0
-          i64.load offset=32
-          i64.lt_u
-          local.get 9
-          local.get 0
-          i32.const 40
-          i32.add
-          i64.load
-          local.tee 8
-          i64.lt_u
+          i64.gt_u
+          local.get 4
           local.get 8
-          local.get 9
           i64.eq
           select
           i32.eqz
-          br_if 0 (;@3;)
-          local.get 5
-          i32.const 255
-          i32.and
           br_if 1 (;@2;)
-          local.get 0
-          local.get 1
-          local.get 6
-          call 63
-          i32.const 255
-          i32.and
-          local.tee 7
-          i32.const 7
-          i32.ne
-          br_if 2 (;@1;)
         end
-        local.get 1
-        local.get 6
-        call 28
-        local.get 2
-        local.get 6
-        i32.const 48
-        i32.add
-        call 28
-        local.get 6
-        i32.const 170
-        i32.add
-        local.get 2
-        i32.const 24
-        i32.add
-        i64.load align=1
-        i64.store align=2
-        local.get 6
-        i32.const 162
-        i32.add
-        local.get 2
-        i32.const 16
-        i32.add
-        i64.load align=1
-        i64.store align=2
-        local.get 6
-        i32.const 154
-        i32.add
-        local.get 2
-        i32.const 8
-        i32.add
-        i64.load align=1
-        i64.store align=2
-        local.get 6
-        i32.const 121
-        i32.add
-        local.get 1
-        i32.const 8
-        i32.add
-        i64.load align=1
-        i64.store align=1
-        local.get 6
-        i32.const 129
-        i32.add
-        local.get 1
-        i32.const 16
-        i32.add
-        i64.load align=1
-        i64.store align=1
-        local.get 6
-        i32.const 137
-        i32.add
-        local.get 1
-        i32.const 24
-        i32.add
-        i64.load align=1
-        i64.store align=1
-        local.get 6
-        local.get 4
-        i64.store offset=104
-        local.get 6
-        local.get 3
-        i64.store offset=96
-        local.get 6
-        i32.const 1
-        i32.store8 offset=112
-        local.get 6
-        local.get 2
-        i64.load align=1
-        i64.store offset=146 align=2
-        local.get 6
-        local.get 1
-        i64.load align=1
-        i64.store offset=113 align=1
-        local.get 6
-        i32.const 66280
-        i32.store offset=184
-        local.get 6
-        i32.const 1
-        i32.store8 offset=145
-        local.get 6
-        i64.const 16384
-        i64.store offset=188 align=4
-        local.get 6
-        i32.const 184
-        i32.add
-        local.tee 0
-        i32.const 3
-        call 33
-        local.get 0
-        i32.const 65577
-        call 30
-        local.get 0
-        local.get 6
-        i32.const 113
-        i32.add
-        call 30
-        local.get 0
-        local.get 6
-        i32.const 146
-        i32.add
-        call 30
-        block  ;; label = @3
-          local.get 6
-          i32.load offset=188
-          local.tee 2
-          local.get 6
-          i32.load offset=192
-          local.tee 0
-          i32.lt_u
-          br_if 0 (;@3;)
-          local.get 6
-          i32.load offset=184
-          local.set 1
-          local.get 6
-          i32.const 0
-          i32.store offset=204
-          local.get 6
-          local.get 2
-          local.get 0
-          i32.sub
-          i32.store offset=200
-          local.get 6
-          local.get 0
-          local.get 1
-          i32.add
-          i32.store offset=196
-          local.get 6
-          i32.const 112
-          i32.add
-          local.get 6
-          i32.const 196
-          i32.add
-          local.tee 2
-          call 51
-          local.get 6
-          i32.const 145
-          i32.add
-          local.get 2
-          call 51
-          local.get 6
-          i64.load offset=96
-          local.get 6
-          i32.const 104
-          i32.add
-          i64.load
-          local.get 2
-          call 27
-          local.get 6
-          i32.load offset=204
-          local.tee 2
-          local.get 6
-          i32.load offset=200
-          i32.gt_u
-          br_if 0 (;@3;)
-          local.get 1
-          local.get 0
-          local.get 6
-          i32.load offset=196
-          local.get 2
-          call 2
-          i32.const 7
-          local.set 7
-          br 2 (;@1;)
-        end
-        unreachable
+        i32.const 0
+        local.set 7
+        br 1 (;@1;)
       end
-      i32.const 3
+      local.get 6
+      local.get 10
+      local.get 3
+      i64.sub
+      local.tee 13
+      i64.store offset=8
+      local.get 6
+      local.get 8
+      local.get 4
+      i64.sub
+      local.get 5
+      i64.extend_i32_u
+      i64.sub
+      local.tee 9
+      i64.store offset=16
+      local.get 6
+      i64.load offset=56
+      local.tee 11
+      local.get 3
+      i64.add
+      local.tee 14
+      local.get 11
+      i64.lt_u
+      local.tee 5
+      local.get 5
+      i64.extend_i32_u
+      local.get 6
+      i32.const -64
+      i32.sub
+      i64.load
+      local.tee 11
+      local.get 4
+      i64.add
+      i64.add
+      local.tee 12
+      local.get 11
+      i64.lt_u
+      local.get 11
+      local.get 12
+      i64.eq
+      select
+      if  ;; label = @2
+        i32.const 4
+        local.set 7
+        br 1 (;@1;)
+      end
+      local.get 6
+      local.get 14
+      i64.store offset=56
+      local.get 6
+      local.get 12
+      i64.store offset=64
+      block  ;; label = @2
+        local.get 3
+        local.get 10
+        i64.xor
+        local.get 4
+        local.get 8
+        i64.xor
+        i64.or
+        i64.eqz
+        br_if 0 (;@2;)
+        local.get 13
+        local.get 0
+        i64.load offset=32
+        i64.lt_u
+        local.get 9
+        local.get 0
+        i32.const 40
+        i32.add
+        i64.load
+        local.tee 8
+        i64.lt_u
+        local.get 8
+        local.get 9
+        i64.eq
+        select
+        i32.eqz
+        br_if 0 (;@2;)
+        local.get 0
+        local.get 1
+        local.get 6
+        i32.const 8
+        i32.add
+        call 66
+        i32.const 255
+        i32.and
+        local.tee 7
+        i32.const 7
+        i32.ne
+        br_if 1 (;@1;)
+      end
+      local.get 1
+      local.get 6
+      i32.const 8
+      i32.add
+      call 28
+      local.get 2
+      local.get 6
+      i32.const 56
+      i32.add
+      call 28
+      ;; Emit event for transfer between different accounts
+      local.get 6
+      i32.const 129
+      i32.add
+      local.get 1
+      i32.const 8
+      i32.add
+      i64.load align=1
+      i64.store align=1
+      local.get 6
+      i32.const 137
+      i32.add
+      local.get 1
+      i32.const 16
+      i32.add
+      i64.load align=1
+      i64.store align=1
+      local.get 6
+      i32.const 145
+      i32.add
+      local.get 1
+      i32.const 24
+      i32.add
+      i64.load align=1
+      i64.store align=1
+      local.get 6
+      i32.const 162
+      i32.add
+      local.get 2
+      i32.const 8
+      i32.add
+      i64.load align=1
+      i64.store align=2
+      local.get 6
+      i32.const 170
+      i32.add
+      local.get 2
+      i32.const 16
+      i32.add
+      i64.load align=1
+      i64.store align=2
+      local.get 6
+      i32.const 178
+      i32.add
+      local.get 2
+      i32.const 24
+      i32.add
+      i64.load align=1
+      i64.store align=2
+      local.get 6
+      i32.const 1
+      i32.store8 offset=120
+      local.get 6
+      i32.const 1
+      i32.store8 offset=153
+      local.get 6
+      local.get 1
+      i64.load align=1
+      i64.store offset=121 align=1
+      local.get 6
+      local.get 2
+      i64.load align=1
+      i64.store offset=154 align=2
+      local.get 6
+      local.get 4
+      i64.store offset=112
+      local.get 6
+      local.get 3
+      i64.store offset=104
+      local.get 6
+      i32.const 104
+      i32.add
+      call 40
+      i32.const 7
       local.set 7
     end
     local.get 6
-    i32.const 208
+    i32.const 192
     i32.add
     global.set 0
     local.get 7)
@@ -4932,10 +5112,10 @@
   ;; MAIN CONTRACT DISPATCHER
   ;; ============================================================================
 
-  ;; Function 60: Main contract call dispatcher
+  ;; Function 63: Main contract call dispatcher
   ;; Decodes input selector and routes to handler
   ;; Parameters: () -> never
-  (func $dispatch_call (;60;) (type 4)
+  (func $dispatch_call (;63;) (type 5)
     (local i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i64 i64 i64 i64 i64 i64 i64 i64 i64 i64)
     global.get 0
     i32.const 528
@@ -4958,7 +5138,7 @@
                               block (result i32)  ;; label = @14
                                 block  ;; label = @15
                                   block  ;; label = @16
-                                    call 40
+                                    call 43
                                     i32.const 255
                                     i32.and
                                     i32.const 5
@@ -4992,7 +5172,7 @@
                                           i32.const 516
                                           i32.add
                                           local.get 1
-                                          call 44
+                                          call 48
                                           br_if 0 (;@19;)
                                           local.get 0
                                           i32.load offset=208
@@ -5168,7 +5348,7 @@
                                                                                                                   i32.const 516
                                                                                                                   i32.add
                                                                                                                   local.tee 1
-                                                                                                                  call 34
+                                                                                                                  call 35
                                                                                                                   local.get 0
                                                                                                                   i32.load8_u offset=208
                                                                                                                   br_if 36 (;@19;)
@@ -5187,9 +5367,9 @@
                                                                                                                   local.set 13
                                                                                                                   local.get 0
                                                                                                                   i64.load offset=464
-                                                                                                                  local.set 15
+                                                                                                                  local.set 14
                                                                                                                   local.get 1
-                                                                                                                  call 55
+                                                                                                                  call 58
                                                                                                                   i32.const 255
                                                                                                                   i32.and
                                                                                                                   local.tee 1
@@ -5224,7 +5404,7 @@
                                                                                                                   i32.load align=1
                                                                                                                   i32.store offset=91 align=1
                                                                                                                   local.get 0
-                                                                                                                  local.get 15
+                                                                                                                  local.get 14
                                                                                                                   i64.store offset=95 align=1
                                                                                                                   local.get 0
                                                                                                                   local.get 1
@@ -5247,7 +5427,7 @@
                                                                                                                   i64.shl
                                                                                                                   i64.or
                                                                                                                   i64.or
-                                                                                                                  local.set 15
+                                                                                                                  local.set 14
                                                                                                                   local.get 0
                                                                                                                   i64.load offset=210 align=1
                                                                                                                   local.set 16
@@ -5360,7 +5540,7 @@
                                                                                                         local.get 0
                                                                                                         i32.const 516
                                                                                                         i32.add
-                                                                                                        call 34
+                                                                                                        call 35
                                                                                                         local.get 0
                                                                                                         i32.load8_u offset=208
                                                                                                         br_if 31 (;@19;)
@@ -5399,7 +5579,7 @@
                                                                                                         i64.shl
                                                                                                         local.get 0
                                                                                                         i64.load offset=216 align=1
-                                                                                                        local.tee 14
+                                                                                                        local.tee 15
                                                                                                         i64.const 8
                                                                                                         i64.shr_u
                                                                                                         i64.or
@@ -5407,14 +5587,14 @@
                                                                                                         local.get 13
                                                                                                         i64.const 8
                                                                                                         i64.shr_u
-                                                                                                        local.set 15
+                                                                                                        local.set 14
                                                                                                         local.get 0
                                                                                                         i32.load8_u offset=210
                                                                                                         local.set 4
                                                                                                         local.get 0
                                                                                                         i32.load8_u offset=209
                                                                                                         local.set 1
-                                                                                                        local.get 14
+                                                                                                        local.get 15
                                                                                                         i32.wrap_i64
                                                                                                         local.set 2
                                                                                                         br 33 (;@17;)
@@ -5441,7 +5621,7 @@
                                                                                                       local.get 0
                                                                                                       i32.const 516
                                                                                                       i32.add
-                                                                                                      call 34
+                                                                                                      call 35
                                                                                                       local.get 0
                                                                                                       i32.load8_u offset=208
                                                                                                       br_if 30 (;@19;)
@@ -5478,7 +5658,7 @@
                                                                                                       i64.shl
                                                                                                       local.get 0
                                                                                                       i64.load offset=216 align=1
-                                                                                                      local.tee 14
+                                                                                                      local.tee 15
                                                                                                       i64.const 8
                                                                                                       i64.shr_u
                                                                                                       i64.or
@@ -5486,14 +5666,14 @@
                                                                                                       local.get 13
                                                                                                       i64.const 8
                                                                                                       i64.shr_u
-                                                                                                      local.set 15
+                                                                                                      local.set 14
                                                                                                       local.get 0
                                                                                                       i32.load8_u offset=210
                                                                                                       local.set 4
                                                                                                       local.get 0
                                                                                                       i32.load8_u offset=209
                                                                                                       local.set 1
-                                                                                                      local.get 14
+                                                                                                      local.get 15
                                                                                                       i32.wrap_i64
                                                                                                       local.set 2
                                                                                                       i32.const 5
@@ -5522,7 +5702,7 @@
                                                                                                     local.get 0
                                                                                                     i32.const 516
                                                                                                     i32.add
-                                                                                                    call 34
+                                                                                                    call 35
                                                                                                     local.get 0
                                                                                                     i32.load8_u offset=208
                                                                                                     br_if 29 (;@19;)
@@ -5559,7 +5739,7 @@
                                                                                                     i64.shl
                                                                                                     local.get 0
                                                                                                     i64.load offset=216 align=1
-                                                                                                    local.tee 14
+                                                                                                    local.tee 15
                                                                                                     i64.const 8
                                                                                                     i64.shr_u
                                                                                                     i64.or
@@ -5567,14 +5747,14 @@
                                                                                                     local.get 13
                                                                                                     i64.const 8
                                                                                                     i64.shr_u
-                                                                                                    local.set 15
+                                                                                                    local.set 14
                                                                                                     local.get 0
                                                                                                     i32.load8_u offset=210
                                                                                                     local.set 4
                                                                                                     local.get 0
                                                                                                     i32.load8_u offset=209
                                                                                                     local.set 1
-                                                                                                    local.get 14
+                                                                                                    local.get 15
                                                                                                     i32.wrap_i64
                                                                                                     local.set 2
                                                                                                     i32.const 6
@@ -5603,7 +5783,7 @@
                                                                                                   local.get 0
                                                                                                   i32.const 516
                                                                                                   i32.add
-                                                                                                  call 34
+                                                                                                  call 35
                                                                                                   local.get 0
                                                                                                   i32.load8_u offset=208
                                                                                                   br_if 28 (;@19;)
@@ -5642,7 +5822,7 @@
                                                                                                   i64.shl
                                                                                                   local.get 0
                                                                                                   i64.load offset=216 align=1
-                                                                                                  local.tee 14
+                                                                                                  local.tee 15
                                                                                                   i64.const 8
                                                                                                   i64.shr_u
                                                                                                   i64.or
@@ -5650,14 +5830,14 @@
                                                                                                   local.get 13
                                                                                                   i64.const 8
                                                                                                   i64.shr_u
-                                                                                                  local.set 15
+                                                                                                  local.set 14
                                                                                                   local.get 0
                                                                                                   i32.load8_u offset=210
                                                                                                   local.set 4
                                                                                                   local.get 0
                                                                                                   i32.load8_u offset=209
                                                                                                   local.set 1
-                                                                                                  local.get 14
+                                                                                                  local.get 15
                                                                                                   i32.wrap_i64
                                                                                                   local.set 2
                                                                                                   br 30 (;@17;)
@@ -5684,7 +5864,7 @@
                                                                                                 local.get 0
                                                                                                 i32.const 516
                                                                                                 i32.add
-                                                                                                call 34
+                                                                                                call 35
                                                                                                 local.get 0
                                                                                                 i32.load8_u offset=208
                                                                                                 br_if 27 (;@19;)
@@ -5723,7 +5903,7 @@
                                                                                                 i64.shl
                                                                                                 local.get 0
                                                                                                 i64.load offset=216 align=1
-                                                                                                local.tee 14
+                                                                                                local.tee 15
                                                                                                 i64.const 8
                                                                                                 i64.shr_u
                                                                                                 i64.or
@@ -5731,14 +5911,14 @@
                                                                                                 local.get 13
                                                                                                 i64.const 8
                                                                                                 i64.shr_u
-                                                                                                local.set 15
+                                                                                                local.set 14
                                                                                                 local.get 0
                                                                                                 i32.load8_u offset=210
                                                                                                 local.set 4
                                                                                                 local.get 0
                                                                                                 i32.load8_u offset=209
                                                                                                 local.set 1
-                                                                                                local.get 14
+                                                                                                local.get 15
                                                                                                 i32.wrap_i64
                                                                                                 local.set 2
                                                                                                 br 29 (;@17;)
@@ -5771,7 +5951,7 @@
                                                                                               i32.const 516
                                                                                               i32.add
                                                                                               local.tee 2
-                                                                                              call 34
+                                                                                              call 35
                                                                                               local.get 0
                                                                                               i32.load8_u offset=208
                                                                                               br_if 26 (;@19;)
@@ -5790,9 +5970,9 @@
                                                                                               local.set 13
                                                                                               local.get 0
                                                                                               i64.load offset=464
-                                                                                              local.set 15
+                                                                                              local.set 14
                                                                                               local.get 2
-                                                                                              call 55
+                                                                                              call 58
                                                                                               i32.const 255
                                                                                               i32.and
                                                                                               local.tee 1
@@ -5800,7 +5980,7 @@
                                                                                               i32.eq
                                                                                               br_if 26 (;@19;)
                                                                                               local.get 2
-                                                                                              call 56
+                                                                                              call 59
                                                                                               i32.const 255
                                                                                               i32.and
                                                                                               local.tee 3
@@ -5808,7 +5988,7 @@
                                                                                               i32.eq
                                                                                               br_if 26 (;@19;)
                                                                                               local.get 2
-                                                                                              call 55
+                                                                                              call 58
                                                                                               i32.const 255
                                                                                               i32.and
                                                                                               local.tee 4
@@ -5843,7 +6023,7 @@
                                                                                               i32.load align=1
                                                                                               i32.store offset=91 align=1
                                                                                               local.get 0
-                                                                                              local.get 15
+                                                                                              local.get 14
                                                                                               i64.store offset=95 align=1
                                                                                               local.get 0
                                                                                               local.get 4
@@ -5872,7 +6052,7 @@
                                                                                               i64.shl
                                                                                               i64.or
                                                                                               i64.or
-                                                                                              local.set 15
+                                                                                              local.set 14
                                                                                               local.get 0
                                                                                               i64.load offset=210 align=1
                                                                                               local.set 16
@@ -5918,7 +6098,7 @@
                                                                                             i64.shl
                                                                                             local.get 0
                                                                                             i64.load offset=216
-                                                                                            local.tee 14
+                                                                                            local.tee 15
                                                                                             i64.const 8
                                                                                             i64.shr_u
                                                                                             i64.or
@@ -5926,8 +6106,8 @@
                                                                                             local.get 13
                                                                                             i64.const 8
                                                                                             i64.shr_u
-                                                                                            local.set 15
-                                                                                            local.get 14
+                                                                                            local.set 14
+                                                                                            local.get 15
                                                                                             i32.wrap_i64
                                                                                             local.set 2
                                                                                             i32.const 10
@@ -5962,7 +6142,7 @@
                                                                                           i32.const 516
                                                                                           i32.add
                                                                                           local.tee 1
-                                                                                          call 34
+                                                                                          call 35
                                                                                           local.get 0
                                                                                           i32.load8_u offset=208
                                                                                           br_if 24 (;@19;)
@@ -6009,7 +6189,7 @@
                                                                                           i64.shl
                                                                                           local.get 0
                                                                                           i64.load offset=216 align=1
-                                                                                          local.tee 14
+                                                                                          local.tee 15
                                                                                           i64.const 8
                                                                                           i64.shr_u
                                                                                           i64.or
@@ -6017,14 +6197,14 @@
                                                                                           local.get 13
                                                                                           i64.const 8
                                                                                           i64.shr_u
-                                                                                          local.set 15
+                                                                                          local.set 14
                                                                                           local.get 0
                                                                                           i32.load8_u offset=209
                                                                                           local.set 1
                                                                                           local.get 0
                                                                                           i32.load8_u offset=210
                                                                                           local.set 4
-                                                                                          local.get 14
+                                                                                          local.get 15
                                                                                           i32.wrap_i64
                                                                                           local.set 2
                                                                                           i32.const 33
@@ -6054,7 +6234,7 @@
                                                                                         i32.const 516
                                                                                         i32.add
                                                                                         local.tee 1
-                                                                                        call 34
+                                                                                        call 35
                                                                                         local.get 0
                                                                                         i32.load8_u offset=208
                                                                                         br_if 23 (;@19;)
@@ -6073,9 +6253,9 @@
                                                                                         local.set 13
                                                                                         local.get 0
                                                                                         i64.load offset=464
-                                                                                        local.set 15
+                                                                                        local.set 14
                                                                                         local.get 1
-                                                                                        call 56
+                                                                                        call 59
                                                                                         i32.const 255
                                                                                         i32.and
                                                                                         local.tee 1
@@ -6110,7 +6290,7 @@
                                                                                         i32.load align=1
                                                                                         i32.store offset=91 align=1
                                                                                         local.get 0
-                                                                                        local.get 15
+                                                                                        local.get 14
                                                                                         i64.store offset=95 align=1
                                                                                         local.get 0
                                                                                         local.get 1
@@ -6133,7 +6313,7 @@
                                                                                         i64.shl
                                                                                         i64.or
                                                                                         i64.or
-                                                                                        local.set 15
+                                                                                        local.set 14
                                                                                         local.get 0
                                                                                         i64.load offset=210 align=1
                                                                                         local.set 16
@@ -6167,12 +6347,12 @@
                                                                                       i32.const 516
                                                                                       i32.add
                                                                                       local.tee 2
-                                                                                      call 34
+                                                                                      call 35
                                                                                       local.get 0
                                                                                       i32.load8_u offset=208
                                                                                       br_if 22 (;@19;)
                                                                                       local.get 2
-                                                                                      call 56
+                                                                                      call 59
                                                                                       i32.const 255
                                                                                       i32.and
                                                                                       local.tee 1
@@ -6180,7 +6360,7 @@
                                                                                       i32.eq
                                                                                       br_if 22 (;@19;)
                                                                                       local.get 2
-                                                                                      call 55
+                                                                                      call 58
                                                                                       i32.const 255
                                                                                       i32.and
                                                                                       local.tee 2
@@ -6227,7 +6407,7 @@
                                                                                       i64.shl
                                                                                       local.get 0
                                                                                       i64.load offset=215 align=1
-                                                                                      local.tee 14
+                                                                                      local.tee 15
                                                                                       i64.const 8
                                                                                       i64.shr_u
                                                                                       i64.or
@@ -6235,11 +6415,11 @@
                                                                                       local.get 13
                                                                                       i64.const 8
                                                                                       i64.shr_u
-                                                                                      local.set 15
+                                                                                      local.set 14
                                                                                       local.get 0
                                                                                       i32.load8_u offset=209
                                                                                       local.set 4
-                                                                                      local.get 14
+                                                                                      local.get 15
                                                                                       i32.wrap_i64
                                                                                       local.set 2
                                                                                       i32.const 13
@@ -6269,7 +6449,7 @@
                                                                                     i32.const 516
                                                                                     i32.add
                                                                                     local.tee 1
-                                                                                    call 34
+                                                                                    call 35
                                                                                     local.get 0
                                                                                     i32.load8_u offset=208
                                                                                     br_if 21 (;@19;)
@@ -6288,7 +6468,7 @@
                                                                                     local.set 13
                                                                                     local.get 0
                                                                                     i64.load offset=464
-                                                                                    local.set 15
+                                                                                    local.set 14
                                                                                     local.get 0
                                                                                     i32.const 16
                                                                                     i32.add
@@ -6340,7 +6520,7 @@
                                                                                     i32.load align=1
                                                                                     i32.store offset=91 align=1
                                                                                     local.get 0
-                                                                                    local.get 15
+                                                                                    local.get 14
                                                                                     i64.store offset=95 align=1
                                                                                     local.get 0
                                                                                     local.get 1
@@ -6371,7 +6551,7 @@
                                                                                   local.get 0
                                                                                   i32.const 516
                                                                                   i32.add
-                                                                                  call 35
+                                                                                  call 36
                                                                                   local.get 0
                                                                                   i32.load offset=208
                                                                                   br_if 20 (;@19;)
@@ -6418,7 +6598,7 @@
                                                                                   i64.shl
                                                                                   local.get 0
                                                                                   i64.load offset=216
-                                                                                  local.tee 14
+                                                                                  local.tee 15
                                                                                   i64.const 8
                                                                                   i64.shr_u
                                                                                   i64.or
@@ -6426,8 +6606,8 @@
                                                                                   local.get 13
                                                                                   i64.const 8
                                                                                   i64.shr_u
-                                                                                  local.set 15
-                                                                                  local.get 14
+                                                                                  local.set 14
+                                                                                  local.get 15
                                                                                   i32.wrap_i64
                                                                                   local.set 2
                                                                                   br 22 (;@17;)
@@ -6454,7 +6634,7 @@
                                                                                 local.get 0
                                                                                 i32.const 516
                                                                                 i32.add
-                                                                                call 35
+                                                                                call 36
                                                                                 local.get 0
                                                                                 i32.load offset=208
                                                                                 br_if 19 (;@19;)
@@ -6501,7 +6681,7 @@
                                                                                 i64.shl
                                                                                 local.get 0
                                                                                 i64.load offset=216
-                                                                                local.tee 14
+                                                                                local.tee 15
                                                                                 i64.const 8
                                                                                 i64.shr_u
                                                                                 i64.or
@@ -6509,8 +6689,8 @@
                                                                                 local.get 13
                                                                                 i64.const 8
                                                                                 i64.shr_u
-                                                                                local.set 15
-                                                                                local.get 14
+                                                                                local.set 14
+                                                                                local.get 15
                                                                                 i32.wrap_i64
                                                                                 local.set 2
                                                                                 br 21 (;@17;)
@@ -6550,7 +6730,7 @@
                                                                               i64.shl
                                                                               local.get 0
                                                                               i64.load offset=216
-                                                                              local.tee 14
+                                                                              local.tee 15
                                                                               i64.const 8
                                                                               i64.shr_u
                                                                               i64.or
@@ -6558,8 +6738,8 @@
                                                                               local.get 13
                                                                               i64.const 8
                                                                               i64.shr_u
-                                                                              local.set 15
-                                                                              local.get 14
+                                                                              local.set 14
+                                                                              local.get 15
                                                                               i32.wrap_i64
                                                                               local.set 2
                                                                               i32.const 19
@@ -6601,7 +6781,7 @@
                                                                             i64.shl
                                                                             local.get 0
                                                                             i64.load offset=216
-                                                                            local.tee 14
+                                                                            local.tee 15
                                                                             i64.const 8
                                                                             i64.shr_u
                                                                             i64.or
@@ -6609,8 +6789,8 @@
                                                                             local.get 13
                                                                             i64.const 8
                                                                             i64.shr_u
-                                                                            local.set 15
-                                                                            local.get 14
+                                                                            local.set 14
+                                                                            local.get 15
                                                                             i32.wrap_i64
                                                                             local.set 2
                                                                             i32.const 20
@@ -6652,7 +6832,7 @@
                                                                           i64.shl
                                                                           local.get 0
                                                                           i64.load offset=216
-                                                                          local.tee 14
+                                                                          local.tee 15
                                                                           i64.const 8
                                                                           i64.shr_u
                                                                           i64.or
@@ -6660,8 +6840,8 @@
                                                                           local.get 13
                                                                           i64.const 8
                                                                           i64.shr_u
-                                                                          local.set 15
-                                                                          local.get 14
+                                                                          local.set 14
+                                                                          local.get 15
                                                                           i32.wrap_i64
                                                                           local.set 2
                                                                           i32.const 21
@@ -6690,7 +6870,7 @@
                                                                         local.get 0
                                                                         i32.const 516
                                                                         i32.add
-                                                                        call 35
+                                                                        call 36
                                                                         local.get 0
                                                                         i32.load offset=208
                                                                         br_if 15 (;@19;)
@@ -6735,7 +6915,7 @@
                                                                         i64.shl
                                                                         local.get 0
                                                                         i64.load offset=216
-                                                                        local.tee 14
+                                                                        local.tee 15
                                                                         i64.const 8
                                                                         i64.shr_u
                                                                         i64.or
@@ -6743,8 +6923,8 @@
                                                                         local.get 13
                                                                         i64.const 8
                                                                         i64.shr_u
-                                                                        local.set 15
-                                                                        local.get 14
+                                                                        local.set 14
+                                                                        local.get 15
                                                                         i32.wrap_i64
                                                                         local.set 2
                                                                         i32.const 22
@@ -6774,7 +6954,7 @@
                                                                       i32.const 516
                                                                       i32.add
                                                                       local.tee 2
-                                                                      call 34
+                                                                      call 35
                                                                       local.get 0
                                                                       i32.load8_u offset=208
                                                                       br_if 14 (;@19;)
@@ -6793,9 +6973,9 @@
                                                                       local.set 13
                                                                       local.get 0
                                                                       i64.load offset=464
-                                                                      local.set 15
+                                                                      local.set 14
                                                                       local.get 2
-                                                                      call 56
+                                                                      call 59
                                                                       i32.const 255
                                                                       i32.and
                                                                       local.tee 1
@@ -6803,7 +6983,7 @@
                                                                       i32.eq
                                                                       br_if 14 (;@19;)
                                                                       local.get 2
-                                                                      call 55
+                                                                      call 58
                                                                       i32.const 255
                                                                       i32.and
                                                                       local.tee 3
@@ -6811,7 +6991,7 @@
                                                                       i32.eq
                                                                       br_if 14 (;@19;)
                                                                       local.get 2
-                                                                      call 55
+                                                                      call 58
                                                                       i32.const 255
                                                                       i32.and
                                                                       local.tee 4
@@ -6846,7 +7026,7 @@
                                                                       i32.load align=1
                                                                       i32.store offset=91 align=1
                                                                       local.get 0
-                                                                      local.get 15
+                                                                      local.get 14
                                                                       i64.store offset=95 align=1
                                                                       local.get 0
                                                                       local.get 4
@@ -6875,7 +7055,7 @@
                                                                       i64.shl
                                                                       i64.or
                                                                       i64.or
-                                                                      local.set 15
+                                                                      local.set 14
                                                                       local.get 0
                                                                       i64.load offset=210 align=1
                                                                       local.set 16
@@ -6908,7 +7088,7 @@
                                                                     local.get 0
                                                                     i32.const 516
                                                                     i32.add
-                                                                    call 35
+                                                                    call 36
                                                                     local.get 0
                                                                     i32.load offset=208
                                                                     br_if 13 (;@19;)
@@ -6953,7 +7133,7 @@
                                                                     i64.shl
                                                                     local.get 0
                                                                     i64.load offset=216
-                                                                    local.tee 14
+                                                                    local.tee 15
                                                                     i64.const 8
                                                                     i64.shr_u
                                                                     i64.or
@@ -6961,8 +7141,8 @@
                                                                     local.get 13
                                                                     i64.const 8
                                                                     i64.shr_u
-                                                                    local.set 15
-                                                                    local.get 14
+                                                                    local.set 14
+                                                                    local.get 15
                                                                     i32.wrap_i64
                                                                     local.set 2
                                                                     i32.const 24
@@ -6991,7 +7171,7 @@
                                                                   local.get 0
                                                                   i32.const 516
                                                                   i32.add
-                                                                  call 35
+                                                                  call 36
                                                                   local.get 0
                                                                   i32.load offset=208
                                                                   br_if 12 (;@19;)
@@ -7036,7 +7216,7 @@
                                                                   i64.shl
                                                                   local.get 0
                                                                   i64.load offset=216
-                                                                  local.tee 14
+                                                                  local.tee 15
                                                                   i64.const 8
                                                                   i64.shr_u
                                                                   i64.or
@@ -7044,8 +7224,8 @@
                                                                   local.get 13
                                                                   i64.const 8
                                                                   i64.shr_u
-                                                                  local.set 15
-                                                                  local.get 14
+                                                                  local.set 14
+                                                                  local.get 15
                                                                   i32.wrap_i64
                                                                   local.set 2
                                                                   i32.const 25
@@ -7074,7 +7254,7 @@
                                                                 local.get 0
                                                                 i32.const 516
                                                                 i32.add
-                                                                call 35
+                                                                call 36
                                                                 local.get 0
                                                                 i32.load offset=208
                                                                 br_if 11 (;@19;)
@@ -7119,7 +7299,7 @@
                                                                 i64.shl
                                                                 local.get 0
                                                                 i64.load offset=216
-                                                                local.tee 14
+                                                                local.tee 15
                                                                 i64.const 8
                                                                 i64.shr_u
                                                                 i64.or
@@ -7127,8 +7307,8 @@
                                                                 local.get 13
                                                                 i64.const 8
                                                                 i64.shr_u
-                                                                local.set 15
-                                                                local.get 14
+                                                                local.set 14
+                                                                local.get 15
                                                                 i32.wrap_i64
                                                                 local.set 2
                                                                 i32.const 26
@@ -7157,7 +7337,7 @@
                                                               local.get 0
                                                               i32.const 516
                                                               i32.add
-                                                              call 35
+                                                              call 36
                                                               local.get 0
                                                               i32.load offset=208
                                                               br_if 10 (;@19;)
@@ -7202,7 +7382,7 @@
                                                               i64.shl
                                                               local.get 0
                                                               i64.load offset=216
-                                                              local.tee 14
+                                                              local.tee 15
                                                               i64.const 8
                                                               i64.shr_u
                                                               i64.or
@@ -7210,8 +7390,8 @@
                                                               local.get 13
                                                               i64.const 8
                                                               i64.shr_u
-                                                              local.set 15
-                                                              local.get 14
+                                                              local.set 14
+                                                              local.get 15
                                                               i32.wrap_i64
                                                               local.set 2
                                                               i32.const 27
@@ -7240,7 +7420,7 @@
                                                             local.get 0
                                                             i32.const 516
                                                             i32.add
-                                                            call 35
+                                                            call 36
                                                             local.get 0
                                                             i32.load offset=208
                                                             br_if 9 (;@19;)
@@ -7285,7 +7465,7 @@
                                                             i64.shl
                                                             local.get 0
                                                             i64.load offset=216
-                                                            local.tee 14
+                                                            local.tee 15
                                                             i64.const 8
                                                             i64.shr_u
                                                             i64.or
@@ -7293,8 +7473,8 @@
                                                             local.get 13
                                                             i64.const 8
                                                             i64.shr_u
-                                                            local.set 15
-                                                            local.get 14
+                                                            local.set 14
+                                                            local.get 15
                                                             i32.wrap_i64
                                                             local.set 2
                                                             i32.const 28
@@ -7324,7 +7504,7 @@
                                                           i32.const 516
                                                           i32.add
                                                           local.tee 1
-                                                          call 34
+                                                          call 35
                                                           local.get 0
                                                           i32.load8_u offset=208
                                                           br_if 8 (;@19;)
@@ -7343,9 +7523,9 @@
                                                           local.set 13
                                                           local.get 0
                                                           i64.load offset=464
-                                                          local.set 15
+                                                          local.set 14
                                                           local.get 1
-                                                          call 56
+                                                          call 59
                                                           i32.const 255
                                                           i32.and
                                                           local.tee 1
@@ -7382,7 +7562,7 @@
                                                           i32.load align=1
                                                           i32.store offset=91 align=1
                                                           local.get 0
-                                                          local.get 15
+                                                          local.get 14
                                                           i64.store offset=95 align=1
                                                           local.get 0
                                                           local.get 1
@@ -7411,7 +7591,7 @@
                                                         local.get 0
                                                         i32.const 516
                                                         i32.add
-                                                        call 35
+                                                        call 36
                                                         local.get 0
                                                         i32.load offset=208
                                                         br_if 7 (;@19;)
@@ -7456,7 +7636,7 @@
                                                         i64.shl
                                                         local.get 0
                                                         i64.load offset=216
-                                                        local.tee 14
+                                                        local.tee 15
                                                         i64.const 8
                                                         i64.shr_u
                                                         i64.or
@@ -7464,8 +7644,8 @@
                                                         local.get 13
                                                         i64.const 8
                                                         i64.shr_u
-                                                        local.set 15
-                                                        local.get 14
+                                                        local.set 14
+                                                        local.get 15
                                                         i32.wrap_i64
                                                         local.set 2
                                                         i32.const 30
@@ -7494,7 +7674,7 @@
                                                       local.get 0
                                                       i32.const 516
                                                       i32.add
-                                                      call 35
+                                                      call 36
                                                       local.get 0
                                                       i32.load offset=208
                                                       br_if 6 (;@19;)
@@ -7539,7 +7719,7 @@
                                                       i64.shl
                                                       local.get 0
                                                       i64.load offset=216
-                                                      local.tee 14
+                                                      local.tee 15
                                                       i64.const 8
                                                       i64.shr_u
                                                       i64.or
@@ -7547,8 +7727,8 @@
                                                       local.get 13
                                                       i64.const 8
                                                       i64.shr_u
-                                                      local.set 15
-                                                      local.get 14
+                                                      local.set 14
+                                                      local.get 15
                                                       i32.wrap_i64
                                                       local.set 2
                                                       i32.const 31
@@ -7578,7 +7758,7 @@
                                                     i32.const 516
                                                     i32.add
                                                     local.tee 2
-                                                    call 34
+                                                    call 35
                                                     local.get 0
                                                     i32.load8_u offset=208
                                                     br_if 5 (;@19;)
@@ -7642,7 +7822,7 @@
                                                     i64.shl
                                                     local.get 0
                                                     i64.load offset=209 align=1
-                                                    local.tee 14
+                                                    local.tee 15
                                                     i64.const 8
                                                     i64.shr_u
                                                     i64.or
@@ -7650,8 +7830,8 @@
                                                     local.get 13
                                                     i64.const 8
                                                     i64.shr_u
-                                                    local.set 15
-                                                    local.get 14
+                                                    local.set 14
+                                                    local.get 15
                                                     i32.wrap_i64
                                                     local.set 2
                                                     i32.const 32
@@ -7712,7 +7892,7 @@
                                               local.get 0
                                               i32.const 516
                                               i32.add
-                                              call 34
+                                              call 35
                                               local.get 0
                                               i32.load8_u offset=208
                                               br_if 2 (;@19;)
@@ -7749,7 +7929,7 @@
                                               i64.shl
                                               local.get 0
                                               i64.load offset=216 align=1
-                                              local.tee 14
+                                              local.tee 15
                                               i64.const 8
                                               i64.shr_u
                                               i64.or
@@ -7757,14 +7937,14 @@
                                               local.get 13
                                               i64.const 8
                                               i64.shr_u
-                                              local.set 15
+                                              local.set 14
                                               local.get 0
                                               i32.load8_u offset=210
                                               local.set 4
                                               local.get 0
                                               i32.load8_u offset=209
                                               local.set 1
-                                              local.get 14
+                                              local.get 15
                                               i32.wrap_i64
                                               local.set 2
                                               i32.const 9
@@ -7788,7 +7968,7 @@
                                             i32.const 516
                                             i32.add
                                             local.tee 2
-                                            call 34
+                                            call 35
                                             local.get 0
                                             i32.load8_u offset=208
                                             br_if 1 (;@19;)
@@ -7845,7 +8025,7 @@
                                             i64.shl
                                             local.get 0
                                             i64.load offset=209 align=1
-                                            local.tee 14
+                                            local.tee 15
                                             i64.const 8
                                             i64.shr_u
                                             i64.or
@@ -7853,8 +8033,8 @@
                                             local.get 13
                                             i64.const 8
                                             i64.shr_u
-                                            local.set 15
-                                            local.get 14
+                                            local.set 14
+                                            local.get 15
                                             i32.wrap_i64
                                             local.set 2
                                             i32.const 11
@@ -7867,7 +8047,7 @@
                                           local.get 0
                                           i32.const 516
                                           i32.add
-                                          call 53
+                                          call 56
                                           local.get 0
                                           i32.load8_u offset=208
                                           local.tee 1
@@ -7911,7 +8091,7 @@
                                           i64.shl
                                           local.get 0
                                           i64.load offset=215 align=1
-                                          local.tee 14
+                                          local.tee 15
                                           i64.const 8
                                           i64.shr_u
                                           i64.or
@@ -7919,18 +8099,18 @@
                                           local.get 13
                                           i64.const 8
                                           i64.shr_u
-                                          local.set 15
+                                          local.set 14
                                           local.get 0
                                           i32.load8_u offset=209
                                           local.set 4
-                                          local.get 14
+                                          local.get 15
                                           i32.wrap_i64
                                           local.set 2
                                           i32.const 34
                                           local.set 3
                                           br 2 (;@17;)
                                         end
-                                        call 49
+                                        call 53
                                         unreachable
                                       end
                                       local.get 0
@@ -7951,7 +8131,7 @@
                                       i64.shl
                                       i64.or
                                       i64.or
-                                      local.set 15
+                                      local.set 14
                                       local.get 0
                                       i64.load offset=210 align=1
                                       local.set 16
@@ -8012,7 +8192,7 @@
                                     i32.load8_u
                                     i32.store8 offset=31
                                     local.get 0
-                                    local.get 15
+                                    local.get 14
                                     i64.const 8
                                     i64.shl
                                     local.get 16
@@ -8030,7 +8210,7 @@
                                     i64.const 8
                                     i64.shl
                                     i64.or
-                                    local.tee 15
+                                    local.tee 14
                                     i64.store offset=32
                                     local.get 0
                                     local.get 4
@@ -8052,7 +8232,7 @@
                                     i32.const 208
                                     i32.add
                                     local.tee 4
-                                    call 36
+                                    call 37
                                     local.get 0
                                     i32.load offset=212
                                     local.tee 7
@@ -8121,7 +8301,7 @@
                                     br_if 0 (;@16;)
                                     local.get 5
                                     i64.load
-                                    local.set 14
+                                    local.set 15
                                     local.get 0
                                     i64.load offset=96
                                     local.set 18
@@ -8162,7 +8342,7 @@
                                     local.set 7
                                     local.get 2
                                     local.get 1
-                                    call 34
+                                    call 35
                                     local.get 0
                                     i32.load8_u offset=88
                                     br_if 0 (;@16;)
@@ -8202,7 +8382,7 @@
                                     i64.store offset=456
                                     local.get 2
                                     local.get 1
-                                    call 53
+                                    call 56
                                     local.get 0
                                     i32.load8_u offset=88
                                     local.tee 1
@@ -8308,7 +8488,7 @@
                                     local.get 17
                                     i64.store offset=104
                                     local.get 0
-                                    local.get 14
+                                    local.get 15
                                     i64.store offset=96
                                     local.get 0
                                     local.get 18
@@ -8375,13 +8555,13 @@
                                                                                                                         br_table 1 (;@57;) 38 (;@20;) 38 (;@20;) 2 (;@56;) 52 (;@6;) 52 (;@6;) 3 (;@55;) 4 (;@54;) 5 (;@53;) 6 (;@52;) 7 (;@51;) 8 (;@50;) 9 (;@49;) 10 (;@48;) 11 (;@47;) 12 (;@46;) 13 (;@45;) 14 (;@44;) 15 (;@43;) 16 (;@42;) 17 (;@41;) 31 (;@27;) 18 (;@40;) 19 (;@39;) 20 (;@38;) 21 (;@37;) 30 (;@28;) 29 (;@29;) 28 (;@30;) 22 (;@36;) 23 (;@35;) 24 (;@34;) 25 (;@33;) 39 (;@19;) 27 (;@31;) 0 (;@58;)
                                                                                                                       end
                                                                                                                       local.get 18
-                                                                                                                      local.get 14
-                                                                                                                      call 46
+                                                                                                                      local.get 15
+                                                                                                                      call 50
                                                                                                                       unreachable
                                                                                                                     end
                                                                                                                     local.get 17
                                                                                                                     local.get 16
-                                                                                                                    call 46
+                                                                                                                    call 50
                                                                                                                     unreachable
                                                                                                                   end
                                                                                                                   global.get 0
@@ -8428,7 +8608,7 @@
                                                                                                                   local.get 1
                                                                                                                   i32.const 16
                                                                                                                   i32.add
-                                                                                                                  call 42
+                                                                                                                  call 46
                                                                                                                   local.get 1
                                                                                                                   i32.const 48
                                                                                                                   i32.add
@@ -8530,7 +8710,7 @@
                                                                                                                 local.get 1
                                                                                                                 i32.const 16
                                                                                                                 i32.add
-                                                                                                                call 42
+                                                                                                                call 46
                                                                                                                 local.get 0
                                                                                                                 i32.const 216
                                                                                                                 i32.add
@@ -8594,7 +8774,7 @@
                                                                                                               local.get 1
                                                                                                               i32.const 16
                                                                                                               i32.add
-                                                                                                              call 42
+                                                                                                              call 46
                                                                                                               local.get 0
                                                                                                               i32.const 216
                                                                                                               i32.add
@@ -8622,13 +8802,13 @@
                                                                                                               i64.load
                                                                                                               i64.add
                                                                                                               i64.add
-                                                                                                              local.tee 15
+                                                                                                              local.tee 14
                                                                                                               local.get 3
                                                                                                               local.get 13
-                                                                                                              local.get 15
+                                                                                                              local.get 14
                                                                                                               i64.gt_u
                                                                                                               local.get 13
-                                                                                                              local.get 15
+                                                                                                              local.get 14
                                                                                                               i64.eq
                                                                                                               select
                                                                                                               local.tee 3
@@ -8690,7 +8870,7 @@
                                                                                                             local.get 1
                                                                                                             i32.const 16
                                                                                                             i32.add
-                                                                                                            call 42
+                                                                                                            call 46
                                                                                                             local.get 0
                                                                                                             i32.const 216
                                                                                                             i32.add
@@ -8708,19 +8888,19 @@
                                                                                                             i64.sub
                                                                                                             local.get 1
                                                                                                             i64.load offset=48
-                                                                                                            local.tee 15
+                                                                                                            local.tee 14
                                                                                                             local.get 1
                                                                                                             i64.load offset=80
-                                                                                                            local.tee 14
+                                                                                                            local.tee 15
                                                                                                             i64.lt_u
                                                                                                             i64.extend_i32_u
                                                                                                             i64.sub
                                                                                                             local.tee 16
-                                                                                                            local.get 15
-                                                                                                            local.get 15
                                                                                                             local.get 14
+                                                                                                            local.get 14
+                                                                                                            local.get 15
                                                                                                             i64.sub
-                                                                                                            local.tee 14
+                                                                                                            local.tee 15
                                                                                                             i64.lt_u
                                                                                                             local.get 13
                                                                                                             local.get 16
@@ -8734,7 +8914,7 @@
                                                                                                             i64.store offset=8
                                                                                                             local.get 2
                                                                                                             i64.const 0
-                                                                                                            local.get 14
+                                                                                                            local.get 15
                                                                                                             local.get 3
                                                                                                             select
                                                                                                             i64.store
@@ -8745,10 +8925,10 @@
                                                                                                             br 47 (;@5;)
                                                                                                           end
                                                                                                           local.get 0
-                                                                                                          local.get 15
+                                                                                                          local.get 14
                                                                                                           i64.store offset=232
                                                                                                           local.get 0
-                                                                                                          local.get 15
+                                                                                                          local.get 14
                                                                                                           i64.store offset=216
                                                                                                           local.get 0
                                                                                                           i32.const 4
@@ -8756,13 +8936,13 @@
                                                                                                           local.get 0
                                                                                                           block (result i32)  ;; label = @52
                                                                                                             local.get 13
-                                                                                                            local.get 15
+                                                                                                            local.get 14
                                                                                                             i64.or
                                                                                                             i64.eqz
                                                                                                             i32.eqz
                                                                                                             if  ;; label = @53
                                                                                                               i32.const 1
-                                                                                                              local.get 15
+                                                                                                              local.get 14
                                                                                                               local.get 18
                                                                                                               i64.add
                                                                                                               local.get 18
@@ -8771,11 +8951,11 @@
                                                                                                               local.get 1
                                                                                                               i64.extend_i32_u
                                                                                                               local.get 13
-                                                                                                              local.get 14
+                                                                                                              local.get 15
                                                                                                               i64.add
                                                                                                               i64.add
-                                                                                                              local.tee 15
-                                                                                                              local.get 14
+                                                                                                              local.tee 14
+                                                                                                              local.get 15
                                                                                                               i64.lt_u
                                                                                                               local.get 14
                                                                                                               local.get 15
@@ -8881,7 +9061,7 @@
                                                                                                           end
                                                                                                           local.get 1
                                                                                                           local.get 3
-                                                                                                          call 52
+                                                                                                          call 55
                                                                                                           unreachable
                                                                                                         end
                                                                                                         local.get 0
@@ -8898,7 +9078,7 @@
                                                                                                         local.set 13
                                                                                                         local.get 0
                                                                                                         i64.load offset=248
-                                                                                                        local.set 15
+                                                                                                        local.set 14
                                                                                                         local.get 0
                                                                                                         local.get 0
                                                                                                         i32.const 88
@@ -8907,7 +9087,7 @@
                                                                                                         i32.store offset=208
                                                                                                         block (result i32)  ;; label = @51
                                                                                                           local.get 13
-                                                                                                          local.get 15
+                                                                                                          local.get 14
                                                                                                           i64.or
                                                                                                           i64.eqz
                                                                                                           i32.eqz
@@ -8915,9 +9095,9 @@
                                                                                                             i32.const 1
                                                                                                             local.get 2
                                                                                                             local.get 1
-                                                                                                            local.get 15
+                                                                                                            local.get 14
                                                                                                             local.get 13
-                                                                                                            call 57
+                                                                                                            call 60
                                                                                                             i32.const 255
                                                                                                             i32.and
                                                                                                             local.tee 3
@@ -8937,13 +9117,13 @@
                                                                                                           call 9
                                                                                                           drop
                                                                                                           local.get 1
-                                                                                                          call 50
+                                                                                                          call 54
                                                                                                           i32.const 7
                                                                                                           local.set 3
                                                                                                           i32.const 0
                                                                                                         end
                                                                                                         local.get 3
-                                                                                                        call 45
+                                                                                                        call 49
                                                                                                         unreachable
                                                                                                       end
                                                                                                       local.get 0
@@ -8960,7 +9140,7 @@
                                                                                                       local.set 13
                                                                                                       local.get 0
                                                                                                       i64.load offset=248
-                                                                                                      local.set 15
+                                                                                                      local.set 14
                                                                                                       local.get 0
                                                                                                       local.get 0
                                                                                                       i32.const 88
@@ -8968,13 +9148,13 @@
                                                                                                       local.tee 2
                                                                                                       i32.store offset=208
                                                                                                       i64.const 0
-                                                                                                      local.set 14
+                                                                                                      local.set 15
                                                                                                       i64.const 0
                                                                                                       local.set 17
                                                                                                       block  ;; label = @50
                                                                                                         block  ;; label = @51
                                                                                                           local.get 13
-                                                                                                          local.get 15
+                                                                                                          local.get 14
                                                                                                           i64.or
                                                                                                           i64.eqz
                                                                                                           i32.eqz
@@ -8986,12 +9166,12 @@
                                                                                                             i32.add
                                                                                                             local.get 2
                                                                                                             local.get 3
-                                                                                                            local.get 15
+                                                                                                            local.get 14
                                                                                                             local.get 13
                                                                                                             local.get 0
                                                                                                             i32.load8_u offset=264
                                                                                                             i32.const 1
-                                                                                                            call 58
+                                                                                                            call 61
                                                                                                             local.get 0
                                                                                                             i32.load8_u offset=456
                                                                                                             br_if 1 (;@51;)
@@ -9002,19 +9182,19 @@
                                                                                                             i32.add
                                                                                                             i64.load
                                                                                                             i64.sub
-                                                                                                            local.get 15
+                                                                                                            local.get 14
                                                                                                             local.get 0
                                                                                                             i64.load offset=464
-                                                                                                            local.tee 14
+                                                                                                            local.tee 15
                                                                                                             i64.lt_u
                                                                                                             i64.extend_i32_u
                                                                                                             i64.sub
                                                                                                             local.tee 16
-                                                                                                            local.get 15
-                                                                                                            local.get 15
                                                                                                             local.get 14
+                                                                                                            local.get 14
+                                                                                                            local.get 15
                                                                                                             i64.sub
-                                                                                                            local.tee 14
+                                                                                                            local.tee 15
                                                                                                             i64.lt_u
                                                                                                             local.get 13
                                                                                                             local.get 16
@@ -9027,10 +9207,10 @@
                                                                                                             select
                                                                                                             local.set 17
                                                                                                             i64.const 0
-                                                                                                            local.get 14
+                                                                                                            local.get 15
                                                                                                             local.get 1
                                                                                                             select
-                                                                                                            local.set 14
+                                                                                                            local.set 15
                                                                                                           end
                                                                                                           local.get 0
                                                                                                           i32.const 208
@@ -9043,7 +9223,7 @@
                                                                                                           call 9
                                                                                                           drop
                                                                                                           local.get 1
-                                                                                                          call 50
+                                                                                                          call 54
                                                                                                           i32.const 0
                                                                                                           local.set 1
                                                                                                           br 1 (;@50;)
@@ -9053,7 +9233,7 @@
                                                                                                         local.set 3
                                                                                                       end
                                                                                                       local.get 0
-                                                                                                      local.get 14
+                                                                                                      local.get 15
                                                                                                       i64.store offset=216
                                                                                                       local.get 0
                                                                                                       local.get 3
@@ -9098,7 +9278,7 @@
                                                                                                     i32.add
                                                                                                     local.get 1
                                                                                                     i32.load8_u offset=12
-                                                                                                    call 43
+                                                                                                    call 47
                                                                                                     local.get 1
                                                                                                     i32.const 48
                                                                                                     i32.add
@@ -9126,7 +9306,7 @@
                                                                                                   block  ;; label = @48
                                                                                                     local.get 1
                                                                                                     i64.load offset=40
-                                                                                                    local.tee 15
+                                                                                                    local.tee 14
                                                                                                     local.get 1
                                                                                                     i32.const 48
                                                                                                     i32.add
@@ -9143,15 +9323,15 @@
                                                                                                     i32.const -64
                                                                                                     i32.sub
                                                                                                     local.get 2
-                                                                                                    call 42
+                                                                                                    call 46
                                                                                                     i32.const 1
                                                                                                     local.set 2
                                                                                                     local.get 1
                                                                                                     i64.load offset=64
-                                                                                                    local.tee 14
-                                                                                                    local.get 15
-                                                                                                    i64.add
+                                                                                                    local.tee 15
                                                                                                     local.get 14
+                                                                                                    i64.add
+                                                                                                    local.get 15
                                                                                                     i64.lt_u
                                                                                                     local.tee 3
                                                                                                     local.get 3
@@ -9175,7 +9355,7 @@
                                                                                                     local.get 0
                                                                                                     i64.load
                                                                                                     local.tee 17
-                                                                                                    local.get 15
+                                                                                                    local.get 14
                                                                                                     i64.add
                                                                                                     local.get 17
                                                                                                     i64.lt_u
@@ -9200,7 +9380,7 @@
                                                                                                     br_if 0 (;@48;)
                                                                                                     i32.const 0
                                                                                                     local.set 2
-                                                                                                    local.get 14
+                                                                                                    local.get 15
                                                                                                     local.get 16
                                                                                                     i64.or
                                                                                                     i64.const 0
@@ -9208,17 +9388,17 @@
                                                                                                     br_if 0 (;@48;)
                                                                                                     local.get 0
                                                                                                     i64.load offset=32
-                                                                                                    local.get 15
+                                                                                                    local.get 14
                                                                                                     i64.le_u
                                                                                                     local.get 0
                                                                                                     i32.const 40
                                                                                                     i32.add
                                                                                                     i64.load
-                                                                                                    local.tee 15
+                                                                                                    local.tee 14
                                                                                                     local.get 13
                                                                                                     i64.le_u
                                                                                                     local.get 13
-                                                                                                    local.get 15
+                                                                                                    local.get 14
                                                                                                     i64.eq
                                                                                                     select
                                                                                                     br_if 0 (;@48;)
@@ -9237,7 +9417,7 @@
                                                                                                   i32.store8
                                                                                                   i32.const 0
                                                                                                   i32.const 2
-                                                                                                  call 52
+                                                                                                  call 55
                                                                                                   unreachable
                                                                                                 end
                                                                                                 local.get 0
@@ -9265,12 +9445,12 @@
                                                                                                 block  ;; label = @47
                                                                                                   local.get 1
                                                                                                   i64.load offset=48
-                                                                                                  local.tee 14
+                                                                                                  local.tee 15
                                                                                                   local.get 1
                                                                                                   i32.const 56
                                                                                                   i32.add
                                                                                                   i64.load
-                                                                                                  local.tee 13
+                                                                                                  local.tee 16
                                                                                                   i64.or
                                                                                                   i64.eqz
                                                                                                   if  ;; label = @48
@@ -9283,105 +9463,115 @@
                                                                                                   i32.const -64
                                                                                                   i32.sub
                                                                                                   local.get 2
-                                                                                                  call 42
-                                                                                                  i64.const 1
-                                                                                                  local.set 17
-                                                                                                  block  ;; label = @48
-                                                                                                    local.get 1
-                                                                                                    i64.load offset=64
-                                                                                                    local.tee 16
-                                                                                                    local.get 14
-                                                                                                    i64.lt_u
-                                                                                                    local.tee 2
-                                                                                                    local.get 1
-                                                                                                    i32.const 72
-                                                                                                    i32.add
-                                                                                                    i64.load
-                                                                                                    local.tee 15
-                                                                                                    local.get 13
-                                                                                                    i64.lt_u
-                                                                                                    local.get 13
-                                                                                                    local.get 15
-                                                                                                    i64.eq
-                                                                                                    select
-                                                                                                    br_if 0 (;@48;)
-                                                                                                    i64.const 0
-                                                                                                    local.get 16
-                                                                                                    local.get 1
-                                                                                                    i64.load offset=96
-                                                                                                    local.tee 18
-                                                                                                    i64.sub
-                                                                                                    local.tee 19
-                                                                                                    local.get 16
-                                                                                                    local.get 19
-                                                                                                    i64.lt_u
-                                                                                                    local.get 15
-                                                                                                    local.get 1
-                                                                                                    i32.const 104
-                                                                                                    i32.add
-                                                                                                    i64.load
-                                                                                                    i64.sub
-                                                                                                    local.get 16
-                                                                                                    local.get 18
-                                                                                                    i64.lt_u
-                                                                                                    i64.extend_i32_u
-                                                                                                    i64.sub
-                                                                                                    local.tee 18
-                                                                                                    local.get 15
-                                                                                                    i64.gt_u
-                                                                                                    local.get 15
-                                                                                                    local.get 18
-                                                                                                    i64.eq
-                                                                                                    select
-                                                                                                    local.tee 5
-                                                                                                    select
-                                                                                                    local.get 14
-                                                                                                    i64.lt_u
-                                                                                                    i64.const 0
-                                                                                                    local.get 18
-                                                                                                    local.get 5
-                                                                                                    select
-                                                                                                    local.tee 18
-                                                                                                    local.get 13
-                                                                                                    i64.lt_u
-                                                                                                    local.get 13
-                                                                                                    local.get 18
-                                                                                                    i64.eq
-                                                                                                    select
-                                                                                                    br_if 0 (;@48;)
+                                                                                                  call 46
+                                                                                                  local.get 3
+                                                                                                  i64.const 0
+                                                                                                  local.get 1
+                                                                                                  i64.load offset=64
+                                                                                                  local.tee 14
+                                                                                                  local.get 1
+                                                                                                  i64.load offset=96
+                                                                                                  local.tee 17
+                                                                                                  i64.sub
+                                                                                                  local.tee 13
+                                                                                                  local.get 13
+                                                                                                  local.get 14
+                                                                                                  i64.gt_u
+                                                                                                  local.get 1
+                                                                                                  i32.const 72
+                                                                                                  i32.add
+                                                                                                  i64.load
+                                                                                                  local.tee 13
+                                                                                                  local.get 1
+                                                                                                  i32.const 104
+                                                                                                  i32.add
+                                                                                                  i64.load
+                                                                                                  i64.sub
+                                                                                                  local.get 14
+                                                                                                  local.get 17
+                                                                                                  i64.lt_u
+                                                                                                  i64.extend_i32_u
+                                                                                                  i64.sub
+                                                                                                  local.tee 17
+                                                                                                  local.get 13
+                                                                                                  i64.gt_u
+                                                                                                  local.get 13
+                                                                                                  local.get 17
+                                                                                                  i64.eq
+                                                                                                  select
+                                                                                                  local.tee 2
+                                                                                                  select
+                                                                                                  local.get 15
+                                                                                                  i64.lt_u
+                                                                                                  i64.const 0
+                                                                                                  local.get 17
+                                                                                                  local.get 2
+                                                                                                  select
+                                                                                                  local.tee 17
+                                                                                                  local.get 16
+                                                                                                  i64.lt_u
+                                                                                                  local.get 16
+                                                                                                  local.get 17
+                                                                                                  i64.eq
+                                                                                                  select
+                                                                                                  if (result i64)  ;; label = @48
+                                                                                                    i64.const 1
+                                                                                                  else
                                                                                                     block  ;; label = @49
                                                                                                       local.get 14
-                                                                                                      local.get 16
-                                                                                                      i64.xor
-                                                                                                      local.get 13
                                                                                                       local.get 15
-                                                                                                      i64.xor
-                                                                                                      i64.or
-                                                                                                      i64.eqz
+                                                                                                      i64.le_u
+                                                                                                      local.get 13
+                                                                                                      local.get 16
+                                                                                                      i64.le_u
+                                                                                                      local.get 13
+                                                                                                      local.get 16
+                                                                                                      i64.eq
+                                                                                                      select
                                                                                                       i32.eqz
                                                                                                       if  ;; label = @50
-                                                                                                        local.get 16
+                                                                                                        i64.const 0
                                                                                                         local.get 14
+                                                                                                        local.get 15
                                                                                                         i64.sub
+                                                                                                        local.tee 17
+                                                                                                        local.get 14
+                                                                                                        local.get 17
+                                                                                                        i64.lt_u
+                                                                                                        local.get 13
+                                                                                                        local.get 16
+                                                                                                        i64.sub
+                                                                                                        local.get 14
+                                                                                                        local.get 15
+                                                                                                        i64.lt_u
+                                                                                                        i64.extend_i32_u
+                                                                                                        i64.sub
+                                                                                                        local.tee 14
+                                                                                                        local.get 13
+                                                                                                        i64.gt_u
+                                                                                                        local.get 13
+                                                                                                        local.get 14
+                                                                                                        i64.eq
+                                                                                                        select
+                                                                                                        local.tee 2
+                                                                                                        select
                                                                                                         local.tee 16
                                                                                                         local.get 4
                                                                                                         i64.load offset=32
                                                                                                         i64.lt_u
-                                                                                                        local.get 15
-                                                                                                        local.get 13
-                                                                                                        i64.sub
+                                                                                                        i64.const 0
+                                                                                                        local.get 14
                                                                                                         local.get 2
-                                                                                                        i64.extend_i32_u
-                                                                                                        i64.sub
+                                                                                                        select
                                                                                                         local.tee 13
                                                                                                         local.get 4
                                                                                                         i32.const 40
                                                                                                         i32.add
                                                                                                         i64.load
-                                                                                                        local.tee 15
+                                                                                                        local.tee 14
                                                                                                         i64.lt_u
                                                                                                         local.get 13
-                                                                                                        local.get 15
+                                                                                                        local.get 14
                                                                                                         i64.eq
                                                                                                         select
                                                                                                         br_if 1 (;@49;)
@@ -9398,10 +9588,7 @@
                                                                                                     local.get 13
                                                                                                     i64.store offset=16
                                                                                                     i64.const 2
-                                                                                                    local.set 17
                                                                                                   end
-                                                                                                  local.get 3
-                                                                                                  local.get 17
                                                                                                   i64.store
                                                                                                 end
                                                                                                 local.get 1
@@ -9413,7 +9600,7 @@
                                                                                                 local.set 13
                                                                                                 local.get 0
                                                                                                 i64.load offset=216
-                                                                                                local.set 15
+                                                                                                local.set 14
                                                                                                 local.get 0
                                                                                                 i32.const 224
                                                                                                 i32.add
@@ -9466,7 +9653,7 @@
                                                                                                       local.get 2
                                                                                                       i32.const 2
                                                                                                       i32.store offset=12
-                                                                                                      local.get 15
+                                                                                                      local.get 14
                                                                                                       local.get 16
                                                                                                       local.get 2
                                                                                                       i32.const 4
@@ -9507,7 +9694,7 @@
                                                                                               i32.const 256
                                                                                               i32.add
                                                                                               i64.load
-                                                                                              local.set 15
+                                                                                              local.set 14
                                                                                               local.get 0
                                                                                               i64.load offset=248
                                                                                               local.set 16
@@ -9515,13 +9702,13 @@
                                                                                               i32.const 392
                                                                                               i32.add
                                                                                               local.tee 3
-                                                                                              call 39
+                                                                                              call 42
                                                                                               block (result i64)  ;; label = @46
                                                                                                 block  ;; label = @47
                                                                                                   block (result i64)  ;; label = @48
                                                                                                     local.get 3
                                                                                                     local.get 1
-                                                                                                    call 41
+                                                                                                    call 44
                                                                                                     if  ;; label = @49
                                                                                                       i64.const 0
                                                                                                       local.set 13
@@ -9532,18 +9719,18 @@
                                                                                                     i32.const 456
                                                                                                     i32.add
                                                                                                     local.get 2
-                                                                                                    call 42
+                                                                                                    call 46
                                                                                                     local.get 0
                                                                                                     i32.const 464
                                                                                                     i32.add
                                                                                                     i64.load
-                                                                                                    local.set 14
+                                                                                                    local.set 15
                                                                                                     local.get 0
                                                                                                     i64.load offset=456
                                                                                                     local.set 17
                                                                                                     block  ;; label = @49
                                                                                                       block  ;; label = @50
-                                                                                                        local.get 15
+                                                                                                        local.get 14
                                                                                                         local.get 16
                                                                                                         i64.or
                                                                                                         i64.eqz
@@ -9558,10 +9745,10 @@
                                                                                                           i32.add
                                                                                                           i64.load
                                                                                                           local.tee 13
-                                                                                                          local.get 15
+                                                                                                          local.get 14
                                                                                                           i64.gt_u
                                                                                                           local.get 13
-                                                                                                          local.get 15
+                                                                                                          local.get 14
                                                                                                           i64.eq
                                                                                                           select
                                                                                                           br_if 1 (;@50;)
@@ -9570,7 +9757,7 @@
                                                                                                         local.get 16
                                                                                                         i64.store offset=456
                                                                                                         local.get 0
-                                                                                                        local.get 15
+                                                                                                        local.get 14
                                                                                                         i64.store offset=464
                                                                                                         local.get 0
                                                                                                         i32.const 96
@@ -9586,7 +9773,7 @@
                                                                                                         local.tee 1
                                                                                                         local.get 14
                                                                                                         local.get 15
-                                                                                                        i64.gt_u
+                                                                                                        i64.lt_u
                                                                                                         local.get 14
                                                                                                         local.get 15
                                                                                                         i64.eq
@@ -9604,14 +9791,14 @@
                                                                                                         local.get 16
                                                                                                         local.get 17
                                                                                                         i64.lt_u
-                                                                                                        local.get 15
                                                                                                         local.get 14
+                                                                                                        local.get 15
                                                                                                         i64.sub
                                                                                                         local.get 1
                                                                                                         i64.extend_i32_u
                                                                                                         i64.sub
-                                                                                                        local.tee 14
-                                                                                                        local.get 15
+                                                                                                        local.tee 15
+                                                                                                        local.get 14
                                                                                                         i64.gt_u
                                                                                                         local.get 14
                                                                                                         local.get 15
@@ -9628,16 +9815,16 @@
                                                                                                         i64.extend_i32_u
                                                                                                         local.get 18
                                                                                                         i64.const 0
-                                                                                                        local.get 14
+                                                                                                        local.get 15
                                                                                                         local.get 1
                                                                                                         select
                                                                                                         local.tee 19
                                                                                                         i64.add
                                                                                                         i64.add
-                                                                                                        local.tee 14
+                                                                                                        local.tee 15
                                                                                                         local.get 18
                                                                                                         i64.lt_u
-                                                                                                        local.get 14
+                                                                                                        local.get 15
                                                                                                         local.get 18
                                                                                                         i64.eq
                                                                                                         select
@@ -9646,15 +9833,15 @@
                                                                                                         local.get 20
                                                                                                         i64.store offset=88
                                                                                                         local.get 0
-                                                                                                        local.get 14
+                                                                                                        local.get 15
                                                                                                         i64.store offset=96
                                                                                                         local.get 0
                                                                                                         i64.load offset=104
-                                                                                                        local.tee 14
+                                                                                                        local.tee 15
                                                                                                         local.get 17
                                                                                                         i64.add
                                                                                                         local.tee 17
-                                                                                                        local.get 14
+                                                                                                        local.get 15
                                                                                                         i64.lt_u
                                                                                                         local.tee 1
                                                                                                         local.get 1
@@ -9667,10 +9854,10 @@
                                                                                                         local.get 19
                                                                                                         i64.add
                                                                                                         i64.add
-                                                                                                        local.tee 14
+                                                                                                        local.tee 15
                                                                                                         local.get 18
                                                                                                         i64.lt_u
-                                                                                                        local.get 14
+                                                                                                        local.get 15
                                                                                                         local.get 18
                                                                                                         i64.eq
                                                                                                         select
@@ -9697,7 +9884,7 @@
                                                                                                       local.tee 1
                                                                                                       local.get 14
                                                                                                       local.get 15
-                                                                                                      i64.gt_u
+                                                                                                      i64.lt_u
                                                                                                       local.get 14
                                                                                                       local.get 15
                                                                                                       i64.eq
@@ -9706,13 +9893,13 @@
                                                                                                       i64.const -1
                                                                                                       local.get 13
                                                                                                       i64.const 0
-                                                                                                      local.get 15
                                                                                                       local.get 14
+                                                                                                      local.get 15
                                                                                                       i64.sub
                                                                                                       local.get 1
                                                                                                       i64.extend_i32_u
                                                                                                       i64.sub
-                                                                                                      local.tee 14
+                                                                                                      local.tee 15
                                                                                                       local.get 16
                                                                                                       local.get 17
                                                                                                       i64.sub
@@ -9721,7 +9908,7 @@
                                                                                                       i64.gt_u
                                                                                                       local.get 14
                                                                                                       local.get 15
-                                                                                                      i64.gt_u
+                                                                                                      i64.lt_u
                                                                                                       local.get 14
                                                                                                       local.get 15
                                                                                                       i64.eq
@@ -9743,18 +9930,18 @@
                                                                                                       local.tee 1
                                                                                                       i64.extend_i32_u
                                                                                                       i64.add
-                                                                                                      local.tee 14
+                                                                                                      local.tee 15
                                                                                                       local.get 1
                                                                                                       local.get 13
-                                                                                                      local.get 14
+                                                                                                      local.get 15
                                                                                                       i64.gt_u
                                                                                                       local.get 13
-                                                                                                      local.get 14
+                                                                                                      local.get 15
                                                                                                       i64.eq
                                                                                                       select
                                                                                                       local.tee 1
                                                                                                       select
-                                                                                                      local.set 14
+                                                                                                      local.set 15
                                                                                                       i64.const -1
                                                                                                       local.get 17
                                                                                                       local.get 1
@@ -9801,15 +9988,15 @@
                                                                                                   end
                                                                                                   local.set 16
                                                                                                   i64.const 2
-                                                                                                  local.set 14
+                                                                                                  local.set 15
                                                                                                   i32.const 1
                                                                                                   br 40 (;@7;)
                                                                                                 end
                                                                                                 i64.const 0
                                                                                                 local.get 13
                                                                                                 i64.const 0
-                                                                                                local.get 14
                                                                                                 local.get 15
+                                                                                                local.get 14
                                                                                                 i64.sub
                                                                                                 local.get 16
                                                                                                 local.get 17
@@ -9823,10 +10010,10 @@
                                                                                                 i64.sub
                                                                                                 local.tee 20
                                                                                                 i64.lt_u
-                                                                                                local.get 14
+                                                                                                local.get 15
                                                                                                 local.get 19
                                                                                                 i64.lt_u
-                                                                                                local.get 14
+                                                                                                local.get 15
                                                                                                 local.get 19
                                                                                                 i64.eq
                                                                                                 select
@@ -9843,7 +10030,7 @@
                                                                                                 i64.lt_u
                                                                                                 i64.extend_i32_u
                                                                                                 i64.sub
-                                                                                                local.tee 14
+                                                                                                local.tee 15
                                                                                                 local.get 18
                                                                                                 local.get 19
                                                                                                 i64.sub
@@ -9851,15 +10038,15 @@
                                                                                                 local.get 18
                                                                                                 i64.gt_u
                                                                                                 local.get 13
-                                                                                                local.get 14
+                                                                                                local.get 15
                                                                                                 i64.lt_u
                                                                                                 local.get 13
-                                                                                                local.get 14
+                                                                                                local.get 15
                                                                                                 i64.eq
                                                                                                 select
                                                                                                 local.tee 1
                                                                                                 select
-                                                                                                local.set 14
+                                                                                                local.set 15
                                                                                                 i64.const 0
                                                                                                 local.get 17
                                                                                                 local.get 1
@@ -9910,7 +10097,7 @@
                                                                                               local.get 18
                                                                                               i64.store offset=88
                                                                                               local.get 0
-                                                                                              local.get 14
+                                                                                              local.get 15
                                                                                               i64.store offset=112
                                                                                               local.get 0
                                                                                               local.get 13
@@ -9952,7 +10139,7 @@
                                                                                             i32.load8_u offset=265
                                                                                             local.get 0
                                                                                             i32.load8_u offset=264
-                                                                                            call 58
+                                                                                            call 61
                                                                                             local.get 0
                                                                                             i32.load8_u offset=456
                                                                                             i32.const 1
@@ -9960,7 +10147,7 @@
                                                                                             br_if 42 (;@2;)
                                                                                             i32.const 1
                                                                                             local.get 3
-                                                                                            call 48
+                                                                                            call 52
                                                                                             unreachable
                                                                                           end
                                                                                           local.get 0
@@ -9977,7 +10164,7 @@
                                                                                           local.set 1
                                                                                           local.get 0
                                                                                           i64.load offset=248
-                                                                                          local.tee 15
+                                                                                          local.tee 14
                                                                                           local.get 0
                                                                                           i32.const 256
                                                                                           i32.add
@@ -9993,11 +10180,11 @@
                                                                                           i32.const 392
                                                                                           i32.add
                                                                                           local.get 1
-                                                                                          call 42
+                                                                                          call 46
                                                                                           block  ;; label = @44
                                                                                             local.get 0
                                                                                             i64.load offset=392
-                                                                                            local.tee 14
+                                                                                            local.tee 15
                                                                                             local.get 0
                                                                                             i32.const 400
                                                                                             i32.add
@@ -10009,7 +10196,7 @@
                                                                                             br_if 0 (;@44;)
                                                                                             local.get 0
                                                                                             i64.load offset=120
-                                                                                            local.get 15
+                                                                                            local.get 14
                                                                                             i64.le_u
                                                                                             local.get 0
                                                                                             i32.const 128
@@ -10026,7 +10213,7 @@
                                                                                             i32.const 1
                                                                                             local.set 3
                                                                                             i64.const 0
-                                                                                            local.set 15
+                                                                                            local.set 14
                                                                                             i64.const 0
                                                                                             local.set 16
                                                                                             local.get 4
@@ -10041,7 +10228,7 @@
                                                                                               local.get 15
                                                                                               i64.add
                                                                                               local.tee 19
-                                                                                              local.get 14
+                                                                                              local.get 15
                                                                                               i64.lt_u
                                                                                               local.tee 3
                                                                                               local.get 3
@@ -10069,7 +10256,7 @@
                                                                                               local.get 0
                                                                                               i64.load offset=88
                                                                                               local.tee 20
-                                                                                              local.get 15
+                                                                                              local.get 14
                                                                                               i64.add
                                                                                               local.tee 22
                                                                                               local.get 20
@@ -10103,7 +10290,7 @@
                                                                                                 local.get 0
                                                                                                 i64.load offset=104
                                                                                                 local.tee 13
-                                                                                                local.get 15
+                                                                                                local.get 14
                                                                                                 i64.add
                                                                                                 local.tee 18
                                                                                                 local.get 13
@@ -10116,13 +10303,13 @@
                                                                                                 local.get 16
                                                                                                 i64.add
                                                                                                 i64.add
-                                                                                                local.tee 14
+                                                                                                local.tee 15
                                                                                                 local.get 5
                                                                                                 local.get 13
-                                                                                                local.get 14
+                                                                                                local.get 15
                                                                                                 i64.gt_u
                                                                                                 local.get 13
-                                                                                                local.get 14
+                                                                                                local.get 15
                                                                                                 i64.eq
                                                                                                 select
                                                                                                 local.tee 4
@@ -10194,7 +10381,7 @@
                                                                                                 local.get 0
                                                                                                 i32.const 456
                                                                                                 i32.add
-                                                                                                call 37
+                                                                                                call 38
                                                                                                 br 33 (;@13;)
                                                                                               end
                                                                                               local.get 4
@@ -10204,14 +10391,14 @@
                                                                                               br_if 33 (;@12;)
                                                                                               local.get 0
                                                                                               i64.const -1
-                                                                                              local.get 14
+                                                                                              local.get 15
                                                                                               local.get 20
                                                                                               i64.const -1
                                                                                               i64.xor
-                                                                                              local.tee 15
+                                                                                              local.tee 14
                                                                                               i64.add
                                                                                               local.tee 17
-                                                                                              local.get 14
+                                                                                              local.get 15
                                                                                               i64.lt_u
                                                                                               local.tee 2
                                                                                               i64.extend_i32_u
@@ -10222,13 +10409,13 @@
                                                                                               local.tee 16
                                                                                               i64.add
                                                                                               i64.add
-                                                                                              local.tee 14
+                                                                                              local.tee 15
                                                                                               local.get 2
                                                                                               local.get 13
-                                                                                              local.get 14
+                                                                                              local.get 15
                                                                                               i64.gt_u
                                                                                               local.get 13
-                                                                                              local.get 14
+                                                                                              local.get 15
                                                                                               i64.eq
                                                                                               select
                                                                                               local.tee 2
@@ -10255,10 +10442,10 @@
                                                                                             local.get 0
                                                                                             i64.load offset=88
                                                                                             local.tee 16
-                                                                                            local.get 14
+                                                                                            local.get 15
                                                                                             i64.const -1
                                                                                             i64.xor
-                                                                                            local.tee 15
+                                                                                            local.tee 14
                                                                                             i64.add
                                                                                             local.tee 17
                                                                                             local.get 16
@@ -10269,7 +10456,7 @@
                                                                                             i32.const 96
                                                                                             i32.add
                                                                                             i64.load
-                                                                                            local.tee 14
+                                                                                            local.tee 15
                                                                                             local.get 13
                                                                                             i64.const -1
                                                                                             i64.xor
@@ -10279,10 +10466,10 @@
                                                                                             local.tee 13
                                                                                             local.get 2
                                                                                             local.get 13
-                                                                                            local.get 14
+                                                                                            local.get 15
                                                                                             i64.lt_u
                                                                                             local.get 13
-                                                                                            local.get 14
+                                                                                            local.get 15
                                                                                             i64.eq
                                                                                             select
                                                                                             local.tee 2
@@ -10301,26 +10488,26 @@
                                                                                           i64.const -1
                                                                                           local.get 0
                                                                                           i64.load offset=104
-                                                                                          local.tee 14
-                                                                                          local.get 15
+                                                                                          local.tee 15
+                                                                                          local.get 14
                                                                                           i64.add
                                                                                           local.tee 19
-                                                                                          local.get 14
+                                                                                          local.get 15
                                                                                           i64.lt_u
                                                                                           local.tee 3
                                                                                           i64.extend_i32_u
                                                                                           local.get 2
                                                                                           i64.load
-                                                                                          local.tee 14
+                                                                                          local.tee 15
                                                                                           local.get 16
                                                                                           i64.add
                                                                                           i64.add
                                                                                           local.tee 17
                                                                                           local.get 3
-                                                                                          local.get 14
+                                                                                          local.get 15
                                                                                           local.get 17
                                                                                           i64.gt_u
-                                                                                          local.get 14
+                                                                                          local.get 15
                                                                                           local.get 17
                                                                                           i64.eq
                                                                                           select
@@ -10350,10 +10537,10 @@
                                                                                         i32.const 208
                                                                                         i32.add
                                                                                         local.tee 2
-                                                                                        call 39
+                                                                                        call 42
                                                                                         local.get 2
                                                                                         local.get 1
-                                                                                        call 41
+                                                                                        call 44
                                                                                         i32.eqz
                                                                                         br_if 20 (;@22;)
                                                                                         i32.const 1
@@ -10365,10 +10552,10 @@
                                                                                       i32.const 208
                                                                                       i32.add
                                                                                       local.tee 2
-                                                                                      call 39
+                                                                                      call 42
                                                                                       local.get 2
                                                                                       local.get 1
-                                                                                      call 41
+                                                                                      call 44
                                                                                       i32.eqz
                                                                                       br_if 17 (;@24;)
                                                                                       i32.const 1
@@ -10380,10 +10567,10 @@
                                                                                     i32.const 208
                                                                                     i32.add
                                                                                     local.tee 2
-                                                                                    call 39
+                                                                                    call 42
                                                                                     local.get 2
                                                                                     local.get 1
-                                                                                    call 41
+                                                                                    call 44
                                                                                     i32.eqz
                                                                                     br_if 14 (;@26;)
                                                                                     i32.const 1
@@ -10420,7 +10607,7 @@
                                                                                   i32.load8_u offset=265
                                                                                   local.get 0
                                                                                   i32.load8_u offset=264
-                                                                                  call 58
+                                                                                  call 61
                                                                                   local.get 0
                                                                                   i32.load8_u offset=456
                                                                                   i32.const 1
@@ -10428,7 +10615,7 @@
                                                                                   br_if 37 (;@2;)
                                                                                   i32.const 1
                                                                                   local.get 3
-                                                                                  call 48
+                                                                                  call 52
                                                                                   unreachable
                                                                                 end
                                                                                 local.get 0
@@ -10447,7 +10634,7 @@
                                                                                   block  ;; label = @40
                                                                                     local.get 0
                                                                                     i64.load offset=248
-                                                                                    local.tee 15
+                                                                                    local.tee 14
                                                                                     local.get 0
                                                                                     i32.const 256
                                                                                     i32.add
@@ -10461,10 +10648,10 @@
                                                                                       i32.const 392
                                                                                       i32.add
                                                                                       local.get 3
-                                                                                      call 42
+                                                                                      call 46
                                                                                       local.get 0
                                                                                       i64.load offset=392
-                                                                                      local.tee 14
+                                                                                      local.tee 15
                                                                                       local.get 0
                                                                                       i32.const 400
                                                                                       i32.add
@@ -10477,7 +10664,7 @@
                                                                                         local.set 1
                                                                                         local.get 0
                                                                                         i64.load offset=120
-                                                                                        local.get 15
+                                                                                        local.get 14
                                                                                         i64.gt_u
                                                                                         local.get 0
                                                                                         i32.const 128
@@ -10497,7 +10684,7 @@
                                                                                       local.get 0
                                                                                       i64.load offset=88
                                                                                       local.tee 17
-                                                                                      local.get 15
+                                                                                      local.get 14
                                                                                       i64.add
                                                                                       local.tee 19
                                                                                       local.get 17
@@ -10530,7 +10717,7 @@
                                                                                       local.get 0
                                                                                       i64.load offset=104
                                                                                       local.tee 17
-                                                                                      local.get 15
+                                                                                      local.get 14
                                                                                       i64.add
                                                                                       local.tee 19
                                                                                       local.get 17
@@ -10564,7 +10751,7 @@
                                                                                       local.get 15
                                                                                       i64.add
                                                                                       local.tee 17
-                                                                                      local.get 14
+                                                                                      local.get 15
                                                                                       i64.lt_u
                                                                                       local.tee 4
                                                                                       local.get 4
@@ -10573,10 +10760,10 @@
                                                                                       local.get 16
                                                                                       i64.add
                                                                                       i64.add
-                                                                                      local.tee 14
+                                                                                      local.tee 15
                                                                                       local.get 16
                                                                                       i64.lt_u
-                                                                                      local.get 14
+                                                                                      local.get 15
                                                                                       local.get 16
                                                                                       i64.eq
                                                                                       select
@@ -10585,7 +10772,7 @@
                                                                                       local.get 17
                                                                                       i64.store offset=392
                                                                                       local.get 0
-                                                                                      local.get 14
+                                                                                      local.get 15
                                                                                       i64.store offset=400
                                                                                       local.get 3
                                                                                       local.get 0
@@ -10626,7 +10813,7 @@
                                                                                       local.get 13
                                                                                       i64.store offset=496
                                                                                       local.get 0
-                                                                                      local.get 15
+                                                                                      local.get 14
                                                                                       i64.store offset=488
                                                                                       local.get 0
                                                                                       local.get 2
@@ -10643,7 +10830,7 @@
                                                                                       i32.add
                                                                                       local.tee 1
                                                                                       i32.const 2
-                                                                                      call 33
+                                                                                      call 34
                                                                                       local.get 1
                                                                                       i32.const 65841
                                                                                       call 30
@@ -10655,7 +10842,7 @@
                                                                                       local.get 0
                                                                                       i32.const 376
                                                                                       i32.add
-                                                                                      call 38
+                                                                                      call 39
                                                                                       local.get 0
                                                                                       i32.load offset=520
                                                                                       local.tee 5
@@ -10716,7 +10903,7 @@
                                                                                     call 9
                                                                                     drop
                                                                                     local.get 1
-                                                                                    call 50
+                                                                                    call 54
                                                                                     i32.const 7
                                                                                     local.set 1
                                                                                     i32.const 0
@@ -10725,7 +10912,7 @@
                                                                                   i32.const 1
                                                                                 end
                                                                                 local.get 1
-                                                                                call 45
+                                                                                call 49
                                                                                 unreachable
                                                                               end
                                                                               local.get 0
@@ -10749,7 +10936,7 @@
                                                                                   i32.const 256
                                                                                   i32.add
                                                                                   i64.load
-                                                                                  local.tee 15
+                                                                                  local.tee 14
                                                                                   i64.or
                                                                                   i64.eqz
                                                                                   i32.eqz
@@ -10759,7 +10946,7 @@
                                                                                     i32.add
                                                                                     local.tee 3
                                                                                     local.get 1
-                                                                                    call 42
+                                                                                    call 46
                                                                                     local.get 0
                                                                                     i64.load offset=392
                                                                                     local.tee 19
@@ -10771,9 +10958,9 @@
                                                                                     i32.add
                                                                                     i64.load
                                                                                     local.tee 16
-                                                                                    local.get 15
+                                                                                    local.get 14
                                                                                     i64.lt_u
-                                                                                    local.get 15
+                                                                                    local.get 14
                                                                                     local.get 16
                                                                                     i64.eq
                                                                                     select
@@ -10785,8 +10972,8 @@
                                                                                     i64.const 0
                                                                                     local.get 5
                                                                                     i64.load
-                                                                                    local.tee 14
-                                                                                    local.get 15
+                                                                                    local.tee 15
+                                                                                    local.get 14
                                                                                     i64.sub
                                                                                     local.get 0
                                                                                     i64.load offset=88
@@ -10802,10 +10989,10 @@
                                                                                     local.tee 20
                                                                                     local.get 17
                                                                                     i64.gt_u
-                                                                                    local.get 14
+                                                                                    local.get 15
                                                                                     local.get 18
                                                                                     i64.lt_u
-                                                                                    local.get 14
+                                                                                    local.get 15
                                                                                     local.get 18
                                                                                     i64.eq
                                                                                     select
@@ -10819,8 +11006,8 @@
                                                                                     i64.const 0
                                                                                     local.get 6
                                                                                     i64.load
-                                                                                    local.tee 14
-                                                                                    local.get 15
+                                                                                    local.tee 15
+                                                                                    local.get 14
                                                                                     i64.sub
                                                                                     local.get 0
                                                                                     i64.load offset=104
@@ -10836,10 +11023,10 @@
                                                                                     i64.sub
                                                                                     local.tee 21
                                                                                     i64.lt_u
-                                                                                    local.get 14
+                                                                                    local.get 15
                                                                                     local.get 18
                                                                                     i64.lt_u
-                                                                                    local.get 14
+                                                                                    local.get 15
                                                                                     local.get 18
                                                                                     i64.eq
                                                                                     select
@@ -10853,7 +11040,7 @@
                                                                                     i64.store offset=392
                                                                                     local.get 0
                                                                                     local.get 16
-                                                                                    local.get 15
+                                                                                    local.get 14
                                                                                     i64.sub
                                                                                     local.get 4
                                                                                     i64.extend_i32_u
@@ -10905,7 +11092,7 @@
                                                                                     i32.const 66280
                                                                                     i32.store offset=340
                                                                                     local.get 0
-                                                                                    local.get 15
+                                                                                    local.get 14
                                                                                     i64.store offset=496
                                                                                     local.get 0
                                                                                     local.get 13
@@ -10925,7 +11112,7 @@
                                                                                     i32.add
                                                                                     local.tee 1
                                                                                     i32.const 2
-                                                                                    call 33
+                                                                                    call 34
                                                                                     local.get 1
                                                                                     i32.const 65874
                                                                                     call 30
@@ -10937,7 +11124,7 @@
                                                                                     local.get 0
                                                                                     i32.const 376
                                                                                     i32.add
-                                                                                    call 38
+                                                                                    call 39
                                                                                     local.get 0
                                                                                     i32.load offset=520
                                                                                     local.tee 5
@@ -10998,7 +11185,7 @@
                                                                                   call 9
                                                                                   drop
                                                                                   local.get 1
-                                                                                  call 50
+                                                                                  call 54
                                                                                   i32.const 0
                                                                                   local.set 2
                                                                                   i32.const 7
@@ -11040,15 +11227,15 @@
                                                                             local.set 13
                                                                             local.get 3
                                                                             i64.load offset=48
-                                                                            local.set 15
+                                                                            local.set 14
                                                                             local.get 3
                                                                             i32.const -64
                                                                             i32.sub
                                                                             local.get 2
-                                                                            call 42
+                                                                            call 46
                                                                             block  ;; label = @37
                                                                               block  ;; label = @38
-                                                                                local.get 15
+                                                                                local.get 14
                                                                                 local.get 3
                                                                                 i64.load offset=64
                                                                                 local.tee 16
@@ -11058,21 +11245,21 @@
                                                                                 i32.const 72
                                                                                 i32.add
                                                                                 i64.load
-                                                                                local.tee 14
+                                                                                local.tee 15
                                                                                 i64.xor
                                                                                 i64.or
                                                                                 i64.eqz
                                                                                 i32.eqz
                                                                                 if  ;; label = @39
                                                                                   block  ;; label = @40
-                                                                                    local.get 15
+                                                                                    local.get 14
                                                                                     local.get 16
                                                                                     i64.le_u
                                                                                     local.get 13
-                                                                                    local.get 14
+                                                                                    local.get 15
                                                                                     i64.le_u
                                                                                     local.get 13
-                                                                                    local.get 14
+                                                                                    local.get 15
                                                                                     i64.eq
                                                                                     select
                                                                                     i32.eqz
@@ -11081,26 +11268,26 @@
                                                                                       i64.load
                                                                                       local.tee 17
                                                                                       i64.const 0
-                                                                                      local.get 15
+                                                                                      local.get 14
                                                                                       local.get 16
                                                                                       i64.sub
                                                                                       local.tee 18
-                                                                                      local.get 15
+                                                                                      local.get 14
                                                                                       local.get 18
                                                                                       i64.lt_u
                                                                                       local.get 13
-                                                                                      local.get 14
-                                                                                      i64.sub
                                                                                       local.get 15
+                                                                                      i64.sub
+                                                                                      local.get 14
                                                                                       local.get 16
                                                                                       i64.lt_u
                                                                                       i64.extend_i32_u
                                                                                       i64.sub
-                                                                                      local.tee 15
+                                                                                      local.tee 14
                                                                                       local.get 13
                                                                                       i64.gt_u
                                                                                       local.get 13
-                                                                                      local.get 15
+                                                                                      local.get 14
                                                                                       i64.eq
                                                                                       select
                                                                                       local.tee 5
@@ -11119,7 +11306,7 @@
                                                                                       i64.load
                                                                                       local.tee 17
                                                                                       i64.const 0
-                                                                                      local.get 15
+                                                                                      local.get 14
                                                                                       local.get 5
                                                                                       select
                                                                                       local.tee 18
@@ -11136,11 +11323,11 @@
                                                                                       local.get 13
                                                                                       local.get 16
                                                                                       i64.add
-                                                                                      local.tee 15
+                                                                                      local.tee 14
                                                                                       local.get 16
                                                                                       i64.lt_u
                                                                                       local.tee 5
-                                                                                      local.get 14
+                                                                                      local.get 15
                                                                                       local.get 18
                                                                                       i64.add
                                                                                       local.tee 17
@@ -11148,9 +11335,9 @@
                                                                                       i64.extend_i32_u
                                                                                       i64.add
                                                                                       local.tee 21
-                                                                                      local.get 14
+                                                                                      local.get 15
                                                                                       i64.lt_u
-                                                                                      local.get 14
+                                                                                      local.get 15
                                                                                       local.get 21
                                                                                       i64.eq
                                                                                       select
@@ -11168,8 +11355,8 @@
                                                                                       local.tee 16
                                                                                       local.get 13
                                                                                       i64.add
-                                                                                      local.tee 14
-                                                                                      local.get 14
+                                                                                      local.tee 15
+                                                                                      local.get 15
                                                                                       local.get 16
                                                                                       i64.lt_u
                                                                                       local.tee 5
@@ -11184,10 +11371,10 @@
                                                                                       local.get 18
                                                                                       i64.add
                                                                                       i64.add
-                                                                                      local.tee 14
+                                                                                      local.tee 15
                                                                                       local.get 16
                                                                                       i64.lt_u
-                                                                                      local.get 14
+                                                                                      local.get 15
                                                                                       local.get 16
                                                                                       i64.eq
                                                                                       select
@@ -11196,13 +11383,13 @@
                                                                                       i64.store offset=16
                                                                                       local.get 5
                                                                                       i64.const -1
-                                                                                      local.get 14
+                                                                                      local.get 15
                                                                                       local.get 6
                                                                                       select
                                                                                       i64.store
                                                                                       local.get 17
                                                                                       local.get 13
-                                                                                      local.get 15
+                                                                                      local.get 14
                                                                                       i64.gt_u
                                                                                       i64.extend_i32_u
                                                                                       i64.add
@@ -11216,30 +11403,30 @@
                                                                                     local.tee 17
                                                                                     i64.const 0
                                                                                     local.get 16
-                                                                                    local.get 15
+                                                                                    local.get 14
                                                                                     i64.sub
                                                                                     local.tee 18
                                                                                     local.get 16
                                                                                     local.get 18
                                                                                     i64.lt_u
-                                                                                    local.get 14
+                                                                                    local.get 15
                                                                                     local.get 13
                                                                                     i64.sub
-                                                                                    local.get 15
+                                                                                    local.get 14
                                                                                     local.get 16
                                                                                     i64.gt_u
                                                                                     i64.extend_i32_u
                                                                                     i64.sub
                                                                                     local.tee 13
-                                                                                    local.get 14
+                                                                                    local.get 15
                                                                                     i64.gt_u
                                                                                     local.get 13
-                                                                                    local.get 14
+                                                                                    local.get 15
                                                                                     i64.eq
                                                                                     select
                                                                                     local.tee 5
                                                                                     select
-                                                                                    local.tee 15
+                                                                                    local.tee 14
                                                                                     i64.sub
                                                                                     local.tee 18
                                                                                     local.get 17
@@ -11257,7 +11444,7 @@
                                                                                     select
                                                                                     local.tee 13
                                                                                     i64.sub
-                                                                                    local.get 15
+                                                                                    local.get 14
                                                                                     local.get 17
                                                                                     i64.gt_u
                                                                                     i64.extend_i32_u
@@ -11283,7 +11470,7 @@
                                                                                     local.get 1
                                                                                     i64.load offset=16
                                                                                     local.tee 17
-                                                                                    local.get 15
+                                                                                    local.get 14
                                                                                     i64.sub
                                                                                     local.tee 18
                                                                                     local.get 17
@@ -11297,7 +11484,7 @@
                                                                                     local.tee 18
                                                                                     local.get 13
                                                                                     i64.sub
-                                                                                    local.get 15
+                                                                                    local.get 14
                                                                                     local.get 17
                                                                                     i64.gt_u
                                                                                     i64.extend_i32_u
@@ -11318,22 +11505,22 @@
                                                                                     local.get 6
                                                                                     select
                                                                                     i64.store
-                                                                                    local.get 14
+                                                                                    local.get 15
                                                                                     local.get 13
                                                                                     i64.sub
-                                                                                    local.get 15
+                                                                                    local.get 14
                                                                                     local.get 16
                                                                                     i64.gt_u
                                                                                     i64.extend_i32_u
                                                                                     i64.sub
                                                                                     local.set 13
                                                                                     local.get 16
-                                                                                    local.get 15
+                                                                                    local.get 14
                                                                                     i64.sub
-                                                                                    local.set 15
+                                                                                    local.set 14
                                                                                   end
                                                                                   local.get 3
-                                                                                  local.get 15
+                                                                                  local.get 14
                                                                                   i64.store offset=64
                                                                                   local.get 3
                                                                                   local.get 13
@@ -11345,7 +11532,7 @@
                                                                                   call 28
                                                                                 end
                                                                                 local.get 4
-                                                                                local.get 15
+                                                                                local.get 14
                                                                                 i64.store
                                                                                 local.get 4
                                                                                 local.get 13
@@ -11356,7 +11543,7 @@
                                                                               local.get 16
                                                                               i64.store
                                                                               local.get 4
-                                                                              local.get 14
+                                                                              local.get 15
                                                                               i64.store offset=8
                                                                             end
                                                                             local.get 3
@@ -11372,14 +11559,14 @@
                                                                             call 9
                                                                             drop
                                                                             local.get 2
-                                                                            call 50
+                                                                            call 54
                                                                             local.get 0
                                                                             i64.load offset=464
                                                                             local.get 0
                                                                             i32.const 472
                                                                             i32.add
                                                                             i64.load
-                                                                            call 46
+                                                                            call 50
                                                                             unreachable
                                                                           end
                                                                           local.get 0
@@ -11398,7 +11585,7 @@
                                                                             block  ;; label = @37
                                                                               local.get 0
                                                                               i64.load offset=248
-                                                                              local.tee 15
+                                                                              local.tee 14
                                                                               local.get 0
                                                                               i32.const 256
                                                                               i32.add
@@ -11413,13 +11600,13 @@
                                                                                 i32.add
                                                                                 local.tee 4
                                                                                 local.get 3
-                                                                                call 42
+                                                                                call 46
                                                                                 i32.const 0
                                                                                 local.set 1
                                                                                 local.get 0
                                                                                 i64.load offset=392
-                                                                                local.tee 14
-                                                                                local.get 15
+                                                                                local.tee 15
+                                                                                local.get 14
                                                                                 i64.lt_u
                                                                                 local.tee 5
                                                                                 local.get 0
@@ -11435,13 +11622,13 @@
                                                                                 select
                                                                                 br_if 1 (;@37;)
                                                                                 i64.const 0
-                                                                                local.get 14
+                                                                                local.get 15
                                                                                 local.get 0
                                                                                 i64.load offset=424
                                                                                 local.tee 17
                                                                                 i64.sub
                                                                                 local.tee 18
-                                                                                local.get 14
+                                                                                local.get 15
                                                                                 local.get 18
                                                                                 i64.lt_u
                                                                                 local.get 16
@@ -11450,7 +11637,7 @@
                                                                                 i32.add
                                                                                 i64.load
                                                                                 i64.sub
-                                                                                local.get 14
+                                                                                local.get 15
                                                                                 local.get 17
                                                                                 i64.lt_u
                                                                                 i64.extend_i32_u
@@ -11464,7 +11651,7 @@
                                                                                 select
                                                                                 local.tee 6
                                                                                 select
-                                                                                local.get 15
+                                                                                local.get 14
                                                                                 i64.lt_u
                                                                                 i64.const 0
                                                                                 local.get 17
@@ -11479,8 +11666,8 @@
                                                                                 select
                                                                                 br_if 1 (;@37;)
                                                                                 local.get 0
-                                                                                local.get 14
                                                                                 local.get 15
+                                                                                local.get 14
                                                                                 i64.sub
                                                                                 i64.store offset=392
                                                                                 local.get 0
@@ -11496,7 +11683,7 @@
                                                                                 local.get 0
                                                                                 i64.load offset=408
                                                                                 local.tee 16
-                                                                                local.get 15
+                                                                                local.get 14
                                                                                 i64.add
                                                                                 local.tee 17
                                                                                 local.get 16
@@ -11512,10 +11699,10 @@
                                                                                 local.get 13
                                                                                 i64.add
                                                                                 i64.add
-                                                                                local.tee 14
+                                                                                local.tee 15
                                                                                 local.get 16
                                                                                 i64.lt_u
-                                                                                local.get 14
+                                                                                local.get 15
                                                                                 local.get 16
                                                                                 i64.eq
                                                                                 select
@@ -11524,7 +11711,7 @@
                                                                                 local.get 17
                                                                                 i64.store offset=408
                                                                                 local.get 0
-                                                                                local.get 14
+                                                                                local.get 15
                                                                                 i64.store offset=416
                                                                                 local.get 3
                                                                                 local.get 4
@@ -11563,7 +11750,7 @@
                                                                                 local.get 13
                                                                                 i64.store offset=496
                                                                                 local.get 0
-                                                                                local.get 15
+                                                                                local.get 14
                                                                                 i64.store offset=488
                                                                                 local.get 0
                                                                                 local.get 2
@@ -11580,7 +11767,7 @@
                                                                                 i32.add
                                                                                 local.tee 1
                                                                                 i32.const 2
-                                                                                call 33
+                                                                                call 34
                                                                                 local.get 1
                                                                                 i32.const 65676
                                                                                 call 30
@@ -11592,7 +11779,7 @@
                                                                                 local.get 0
                                                                                 i32.const 376
                                                                                 i32.add
-                                                                                call 38
+                                                                                call 39
                                                                                 local.get 0
                                                                                 i32.load offset=520
                                                                                 local.tee 5
@@ -11653,7 +11840,7 @@
                                                                               call 9
                                                                               drop
                                                                               local.get 1
-                                                                              call 50
+                                                                              call 54
                                                                               i32.const 7
                                                                               local.set 1
                                                                               i32.const 0
@@ -11662,7 +11849,7 @@
                                                                             i32.const 1
                                                                           end
                                                                           local.get 1
-                                                                          call 45
+                                                                          call 49
                                                                           unreachable
                                                                         end
                                                                         local.get 0
@@ -11680,7 +11867,7 @@
                                                                         i64.const 0
                                                                         local.set 16
                                                                         i64.const 0
-                                                                        local.set 15
+                                                                        local.set 14
                                                                         block (result i32)  ;; label = @35
                                                                           block  ;; label = @36
                                                                             local.get 0
@@ -11700,7 +11887,7 @@
                                                                               i32.add
                                                                               local.tee 3
                                                                               local.get 1
-                                                                              call 42
+                                                                              call 46
                                                                               local.get 0
                                                                               i32.const 416
                                                                               i32.add
@@ -11714,7 +11901,7 @@
                                                                               local.get 18
                                                                               local.get 0
                                                                               i64.load offset=408
-                                                                              local.tee 14
+                                                                              local.tee 15
                                                                               i64.lt_u
                                                                               local.get 13
                                                                               local.get 17
@@ -11725,11 +11912,11 @@
                                                                               select
                                                                               local.tee 4
                                                                               select
-                                                                              local.tee 15
+                                                                              local.tee 14
                                                                               i64.sub
-                                                                              local.get 14
+                                                                              local.get 15
                                                                               local.get 18
-                                                                              local.get 14
+                                                                              local.get 15
                                                                               local.get 4
                                                                               select
                                                                               local.tee 16
@@ -11737,8 +11924,8 @@
                                                                               i64.extend_i32_u
                                                                               i64.sub
                                                                               local.tee 17
-                                                                              local.get 14
-                                                                              local.get 14
+                                                                              local.get 15
+                                                                              local.get 15
                                                                               local.get 16
                                                                               i64.sub
                                                                               local.tee 18
@@ -11775,14 +11962,14 @@
                                                                               i32.add
                                                                               i64.load
                                                                               local.tee 13
-                                                                              local.get 15
+                                                                              local.get 14
                                                                               i64.add
                                                                               i64.add
-                                                                              local.tee 14
+                                                                              local.tee 15
                                                                               local.get 13
                                                                               i64.lt_u
                                                                               local.get 13
-                                                                              local.get 14
+                                                                              local.get 15
                                                                               i64.eq
                                                                               select
                                                                               br_if 1 (;@36;)
@@ -11790,7 +11977,7 @@
                                                                               local.get 17
                                                                               i64.store offset=392
                                                                               local.get 0
-                                                                              local.get 14
+                                                                              local.get 15
                                                                               i64.store offset=400
                                                                               local.get 1
                                                                               local.get 3
@@ -11826,7 +12013,7 @@
                                                                               i32.const 66280
                                                                               i32.store offset=364
                                                                               local.get 0
-                                                                              local.get 15
+                                                                              local.get 14
                                                                               i64.store offset=496
                                                                               local.get 0
                                                                               local.get 16
@@ -11846,7 +12033,7 @@
                                                                               i32.add
                                                                               local.tee 1
                                                                               i32.const 2
-                                                                              call 33
+                                                                              call 34
                                                                               local.get 1
                                                                               i32.const 65709
                                                                               call 30
@@ -11858,7 +12045,7 @@
                                                                               local.get 0
                                                                               i32.const 376
                                                                               i32.add
-                                                                              call 38
+                                                                              call 39
                                                                               local.get 0
                                                                               i32.load offset=520
                                                                               local.tee 5
@@ -11919,7 +12106,7 @@
                                                                             call 9
                                                                             drop
                                                                             local.get 1
-                                                                            call 50
+                                                                            call 54
                                                                             i32.const 0
                                                                             br 1 (;@35;)
                                                                           end
@@ -11936,7 +12123,7 @@
                                                                         local.get 1
                                                                         i32.store8 offset=208
                                                                         local.get 0
-                                                                        local.get 15
+                                                                        local.get 14
                                                                         i64.store offset=224
                                                                         br 30 (;@4;)
                                                                       end
@@ -11959,7 +12146,7 @@
                                                                       local.set 13
                                                                       local.get 0
                                                                       i64.load offset=256
-                                                                      local.set 15
+                                                                      local.set 14
                                                                       local.get 0
                                                                       i64.load offset=248
                                                                       local.set 16
@@ -12019,7 +12206,7 @@
                                                                           i32.gt_u
                                                                           if  ;; label = @36
                                                                             local.get 0
-                                                                            local.get 15
+                                                                            local.get 14
                                                                             i64.store offset=456
                                                                             local.get 0
                                                                             local.get 16
@@ -12072,7 +12259,7 @@
                                                                       local.get 13
                                                                       i64.store offset=8
                                                                       local.get 1
-                                                                      local.get 15
+                                                                      local.get 14
                                                                       i64.store
                                                                       br 16 (;@17;)
                                                                     end
@@ -12102,7 +12289,7 @@
                                                                     i32.eq
                                                                     if  ;; label = @33
                                                                       i64.const 0
-                                                                      local.set 15
+                                                                      local.set 14
                                                                       i32.const 1
                                                                       local.set 2
                                                                       i32.const 0
@@ -12122,7 +12309,7 @@
                                                                     i32.eqz
                                                                     if  ;; label = @33
                                                                       i64.const 0
-                                                                      local.set 15
+                                                                      local.set 14
                                                                       i32.const 1
                                                                       local.set 2
                                                                       i32.const 0
@@ -12157,13 +12344,13 @@
                                                                         local.set 1
                                                                         local.get 3
                                                                         i64.load align=1
-                                                                        local.set 15
+                                                                        local.set 14
                                                                         local.get 3
                                                                         i32.const 24
                                                                         i32.add
                                                                         local.set 3
                                                                         local.get 13
-                                                                        local.get 15
+                                                                        local.get 14
                                                                         i64.ne
                                                                         br_if 1 (;@33;)
                                                                       end
@@ -12228,7 +12415,7 @@
                                                                         i32.eq
                                                                         if  ;; label = @35
                                                                           i64.const 0
-                                                                          local.set 15
+                                                                          local.set 14
                                                                           i32.const 1
                                                                           local.set 2
                                                                           i64.const 0
@@ -12242,7 +12429,7 @@
                                                                         local.set 16
                                                                         local.get 6
                                                                         i64.load
-                                                                        local.set 15
+                                                                        local.set 14
                                                                         i32.const 0
                                                                         local.set 2
                                                                         local.get 7
@@ -12272,10 +12459,10 @@
                                                                           i32.add
                                                                           i64.load
                                                                           local.tee 13
-                                                                          local.get 15
+                                                                          local.get 14
                                                                           local.get 1
                                                                           i64.load
-                                                                          local.tee 14
+                                                                          local.tee 15
                                                                           i64.gt_u
                                                                           local.get 13
                                                                           local.get 16
@@ -12287,11 +12474,11 @@
                                                                           local.tee 4
                                                                           select
                                                                           local.set 16
-                                                                          local.get 15
                                                                           local.get 14
+                                                                          local.get 15
                                                                           local.get 4
                                                                           select
-                                                                          local.set 15
+                                                                          local.set 14
                                                                           local.get 1
                                                                           i32.const 24
                                                                           i32.add
@@ -12320,8 +12507,8 @@
                                                                   i64.const 0
                                                                   local.get 18
                                                                   i64.const 0
-                                                                  local.get 14
                                                                   local.get 15
+                                                                  local.get 14
                                                                   i64.sub
                                                                   local.get 16
                                                                   local.get 17
@@ -12336,10 +12523,10 @@
                                                                   local.tee 20
                                                                   i64.lt_u
                                                                   local.get 13
-                                                                  local.get 14
+                                                                  local.get 15
                                                                   i64.gt_u
                                                                   local.get 13
-                                                                  local.get 14
+                                                                  local.get 15
                                                                   i64.eq
                                                                   select
                                                                   local.tee 1
@@ -12355,17 +12542,17 @@
                                                                   i64.lt_u
                                                                   i64.extend_i32_u
                                                                   i64.sub
-                                                                  local.tee 14
+                                                                  local.tee 15
                                                                   local.get 19
                                                                   local.get 19
                                                                   local.get 13
                                                                   i64.sub
                                                                   local.tee 20
                                                                   i64.lt_u
-                                                                  local.get 14
+                                                                  local.get 15
                                                                   local.get 18
                                                                   i64.gt_u
-                                                                  local.get 14
+                                                                  local.get 15
                                                                   local.get 18
                                                                   i64.eq
                                                                   select
@@ -12383,7 +12570,7 @@
                                                                   i32.const 112
                                                                   i32.add
                                                                   i64.load
-                                                                  local.tee 14
+                                                                  local.tee 15
                                                                   local.get 17
                                                                   i64.sub
                                                                   local.get 0
@@ -12400,16 +12587,16 @@
                                                                   local.tee 13
                                                                   local.get 17
                                                                   i64.gt_u
-                                                                  local.get 14
+                                                                  local.get 15
                                                                   local.get 18
                                                                   i64.lt_u
-                                                                  local.get 14
+                                                                  local.get 15
                                                                   local.get 18
                                                                   i64.eq
                                                                   select
                                                                   local.tee 1
                                                                   select
-                                                                  local.set 14
+                                                                  local.set 15
                                                                   i64.const 0
                                                                   local.get 13
                                                                   local.get 1
@@ -12466,7 +12653,7 @@
                                                                   local.get 2
                                                                   i32.const 4
                                                                   i32.add
-                                                                  call 51
+                                                                  call 41
                                                                   local.get 2
                                                                   i32.load offset=12
                                                                   local.tee 1
@@ -12497,7 +12684,7 @@
                                                               local.set 13
                                                               local.get 0
                                                               i64.load offset=248
-                                                              local.set 15
+                                                              local.set 14
                                                               local.get 0
                                                               i32.load8_u offset=264
                                                               local.set 3
@@ -12505,14 +12692,14 @@
                                                               i32.const 456
                                                               i32.add
                                                               local.tee 4
-                                                              call 39
+                                                              call 42
                                                               local.get 1
                                                               local.get 4
                                                               local.get 2
-                                                              local.get 15
+                                                              local.get 14
                                                               local.get 13
                                                               local.get 3
-                                                              call 59
+                                                              call 62
                                                               i32.const 255
                                                               i32.and
                                                               local.tee 2
@@ -12528,13 +12715,13 @@
                                                                 call 9
                                                                 drop
                                                                 local.get 0
-                                                                call 50
+                                                                call 54
                                                                 i32.const 0
                                                               else
                                                                 i32.const 1
                                                               end
                                                               local.get 2
-                                                              call 45
+                                                              call 49
                                                               unreachable
                                                             end
                                                             local.get 0
@@ -12557,19 +12744,19 @@
                                                             local.set 13
                                                             local.get 0
                                                             i64.load offset=248
-                                                            local.set 15
+                                                            local.set 14
                                                             local.get 0
                                                             i32.const 456
                                                             i32.add
                                                             local.tee 3
-                                                            call 39
+                                                            call 42
                                                             local.get 1
                                                             local.get 3
                                                             local.get 2
-                                                            local.get 15
+                                                            local.get 14
                                                             local.get 13
                                                             i32.const 1
-                                                            call 59
+                                                            call 62
                                                             i32.const 255
                                                             i32.and
                                                             local.tee 2
@@ -12585,13 +12772,13 @@
                                                               call 9
                                                               drop
                                                               local.get 0
-                                                              call 50
+                                                              call 54
                                                               i32.const 0
                                                             else
                                                               i32.const 1
                                                             end
                                                             local.get 2
-                                                            call 45
+                                                            call 49
                                                             unreachable
                                                           end
                                                           local.get 0
@@ -12614,19 +12801,19 @@
                                                           local.set 13
                                                           local.get 0
                                                           i64.load offset=248
-                                                          local.set 15
+                                                          local.set 14
                                                           local.get 0
                                                           i32.const 456
                                                           i32.add
                                                           local.tee 3
-                                                          call 39
+                                                          call 42
                                                           local.get 1
                                                           local.get 3
                                                           local.get 2
-                                                          local.get 15
+                                                          local.get 14
                                                           local.get 13
                                                           i32.const 0
-                                                          call 59
+                                                          call 62
                                                           i32.const 255
                                                           i32.and
                                                           local.tee 2
@@ -12642,13 +12829,13 @@
                                                             call 9
                                                             drop
                                                             local.get 0
-                                                            call 50
+                                                            call 54
                                                             i32.const 0
                                                           else
                                                             i32.const 1
                                                           end
                                                           local.get 2
-                                                          call 45
+                                                          call 49
                                                           unreachable
                                                         end
                                                         local.get 0
@@ -12672,7 +12859,7 @@
                                                         i32.const 256
                                                         i32.add
                                                         i64.load
-                                                        call 57
+                                                        call 60
                                                         i32.const 255
                                                         i32.and
                                                         local.tee 2
@@ -12688,21 +12875,21 @@
                                                           call 9
                                                           drop
                                                           local.get 0
-                                                          call 50
+                                                          call 54
                                                           i32.const 0
                                                         else
                                                           i32.const 1
                                                         end
                                                         local.get 2
-                                                        call 45
+                                                        call 49
                                                         unreachable
                                                       end
                                                       local.get 0
                                                       i64.const -1
-                                                      local.get 15
+                                                      local.get 14
                                                       local.get 17
                                                       i64.add
-                                                      local.tee 15
+                                                      local.tee 14
                                                       local.get 17
                                                       i64.lt_u
                                                       local.tee 1
@@ -12723,26 +12910,26 @@
                                                       local.tee 1
                                                       select
                                                       local.tee 13
-                                                      local.get 14
-                                                      i64.const -1
                                                       local.get 15
+                                                      i64.const -1
+                                                      local.get 14
                                                       local.get 1
                                                       select
-                                                      local.tee 15
+                                                      local.tee 14
                                                       local.get 18
                                                       i64.lt_u
                                                       local.get 13
-                                                      local.get 14
+                                                      local.get 15
                                                       i64.lt_u
                                                       local.get 13
-                                                      local.get 14
+                                                      local.get 15
                                                       i64.eq
                                                       select
                                                       local.tee 1
                                                       select
                                                       i64.store offset=112
                                                       local.get 0
-                                                      local.get 15
+                                                      local.get 14
                                                       local.get 18
                                                       local.get 1
                                                       select
@@ -12758,7 +12945,7 @@
                                                       call 9
                                                       drop
                                                       local.get 1
-                                                      call 50
+                                                      call 54
                                                       i32.const 0
                                                       local.set 2
                                                       i32.const 7
@@ -12771,16 +12958,16 @@
                                                   local.get 16
                                                   local.get 13
                                                   i64.sub
-                                                  local.get 15
+                                                  local.get 14
                                                   local.get 17
                                                   i64.gt_u
                                                   i64.extend_i32_u
                                                   i64.sub
                                                   local.tee 13
                                                   local.get 17
-                                                  local.get 15
+                                                  local.get 14
                                                   i64.sub
-                                                  local.tee 15
+                                                  local.tee 14
                                                   local.get 17
                                                   i64.gt_u
                                                   local.get 13
@@ -12795,7 +12982,7 @@
                                                   i64.store offset=112
                                                   local.get 0
                                                   i64.const 0
-                                                  local.get 15
+                                                  local.get 14
                                                   local.get 1
                                                   select
                                                   i64.store offset=104
@@ -12810,7 +12997,7 @@
                                                   call 9
                                                   drop
                                                   local.get 1
-                                                  call 50
+                                                  call 54
                                                   i32.const 0
                                                   local.set 2
                                                   i32.const 7
@@ -12819,7 +13006,7 @@
                                                 br 19 (;@3;)
                                               end
                                               local.get 0
-                                              local.get 15
+                                              local.get 14
                                               i64.store offset=88
                                               local.get 0
                                               local.get 13
@@ -12828,7 +13015,7 @@
                                               local.get 13
                                               local.get 16
                                               local.get 13
-                                              local.get 15
+                                              local.get 14
                                               local.get 17
                                               i64.gt_u
                                               local.get 13
@@ -12840,7 +13027,7 @@
                                               select
                                               local.tee 1
                                               select
-                                              local.get 14
+                                              local.get 15
                                               local.get 18
                                               i64.or
                                               i64.eqz
@@ -12848,9 +13035,9 @@
                                               select
                                               i64.store offset=112
                                               local.get 0
-                                              local.get 15
+                                              local.get 14
                                               local.get 17
-                                              local.get 15
+                                              local.get 14
                                               local.get 1
                                               select
                                               local.get 2
@@ -12867,7 +13054,7 @@
                                               call 9
                                               drop
                                               local.get 1
-                                              call 50
+                                              call 54
                                               i32.const 0
                                               local.set 2
                                               i32.const 7
@@ -12877,18 +13064,18 @@
                                           end
                                           local.get 20
                                           local.get 19
-                                          call 46
+                                          call 50
                                           unreachable
                                         end
                                         local.get 0
                                         i32.const 208
                                         i32.add
                                         local.tee 2
-                                        call 39
+                                        call 42
                                         block (result i32)  ;; label = @19
                                           local.get 2
                                           local.get 1
-                                          call 41
+                                          call 44
                                           if  ;; label = @20
                                             i32.const 1
                                             local.set 2
@@ -12911,7 +13098,7 @@
                                           call 9
                                           drop
                                           local.get 1
-                                          call 50
+                                          call 54
                                           i32.const 0
                                           local.set 2
                                           i32.const 7
@@ -12923,7 +13110,7 @@
                                       i32.const 456
                                       i32.add
                                       local.get 8
-                                      call 42
+                                      call 46
                                       local.get 0
                                       i32.const 496
                                       i32.add
@@ -12935,9 +13122,9 @@
                                       i64.store
                                       local.get 0
                                       i64.load offset=488
-                                      local.set 14
+                                      local.set 15
                                       local.get 0
-                                      local.get 15
+                                      local.get 14
                                       i64.store offset=488
                                       block  ;; label = @18
                                         local.get 2
@@ -13013,7 +13200,7 @@
                                       call 28
                                       local.get 14
                                       local.get 15
-                                      i64.le_u
+                                      i64.ge_u
                                       local.get 13
                                       local.get 16
                                       i64.le_u
@@ -13064,15 +13251,15 @@
                                         i64.sub
                                         local.get 14
                                         local.get 15
-                                        i64.lt_u
+                                        i64.gt_u
                                         i64.extend_i32_u
                                         i64.sub
                                         local.tee 16
-                                        local.get 14
                                         local.get 15
-                                        i64.sub
-                                        local.tee 15
                                         local.get 14
+                                        i64.sub
+                                        local.tee 14
+                                        local.get 15
                                         i64.gt_u
                                         local.get 13
                                         local.get 16
@@ -13086,7 +13273,7 @@
                                         i64.store offset=248
                                         local.get 0
                                         i64.const 0
-                                        local.get 15
+                                        local.get 14
                                         local.get 1
                                         select
                                         i64.store offset=240
@@ -13101,7 +13288,7 @@
                                         i32.add
                                         local.tee 1
                                         i32.const 2
-                                        call 33
+                                        call 34
                                         local.get 1
                                         i32.const 65775
                                         call 30
@@ -13113,7 +13300,7 @@
                                         local.get 0
                                         i32.const 376
                                         i32.add
-                                        call 38
+                                        call 39
                                         local.get 0
                                         i32.load offset=520
                                         local.tee 5
@@ -13174,14 +13361,14 @@
                                       call 9
                                       drop
                                       local.get 1
-                                      call 50
+                                      call 54
                                       i32.const 0
                                       i32.const 7
-                                      call 45
+                                      call 49
                                       unreachable
                                     end
                                     i64.const 0
-                                    local.set 15
+                                    local.set 14
                                     i64.const 0
                                     local.set 16
                                     block  ;; label = @17
@@ -13195,7 +13382,7 @@
                                       local.set 16
                                       local.get 4
                                       i64.load
-                                      local.set 15
+                                      local.set 14
                                       local.get 5
                                       i32.const 1
                                       i32.eq
@@ -13219,10 +13406,10 @@
                                         i32.add
                                         i64.load
                                         local.tee 13
-                                        local.get 15
+                                        local.get 14
                                         local.get 1
                                         i64.load
-                                        local.tee 14
+                                        local.tee 15
                                         i64.gt_u
                                         local.get 13
                                         local.get 16
@@ -13234,11 +13421,11 @@
                                         local.tee 7
                                         select
                                         local.set 16
-                                        local.get 15
                                         local.get 14
+                                        local.get 15
                                         local.get 7
                                         select
-                                        local.set 15
+                                        local.set 14
                                         local.get 1
                                         i32.const 24
                                         i32.add
@@ -13255,7 +13442,7 @@
                                     i32.add
                                     local.tee 1
                                     local.get 6
-                                    call 42
+                                    call 46
                                     local.get 0
                                     i32.const 432
                                     i32.add
@@ -13264,9 +13451,9 @@
                                     local.set 13
                                     local.get 0
                                     i64.load offset=424
-                                    local.set 14
+                                    local.set 15
                                     local.get 0
-                                    local.get 15
+                                    local.get 14
                                     i64.store offset=424
                                     local.get 3
                                     local.get 16
@@ -13280,7 +13467,7 @@
                                     call 28
                                     local.get 14
                                     local.get 15
-                                    i64.lt_u
+                                    i64.gt_u
                                     local.get 13
                                     local.get 16
                                     i64.lt_u
@@ -13331,15 +13518,15 @@
                                     i64.sub
                                     local.get 14
                                     local.get 15
-                                    i64.gt_u
+                                    i64.lt_u
                                     i64.extend_i32_u
                                     i64.sub
                                     local.tee 13
-                                    local.get 15
-                                    local.get 15
                                     local.get 14
+                                    local.get 14
+                                    local.get 15
                                     i64.sub
-                                    local.tee 14
+                                    local.tee 15
                                     i64.lt_u
                                     local.get 13
                                     local.get 16
@@ -13353,7 +13540,7 @@
                                     i64.store offset=496
                                     local.get 0
                                     i64.const 0
-                                    local.get 14
+                                    local.get 15
                                     local.get 1
                                     select
                                     i64.store offset=488
@@ -13368,7 +13555,7 @@
                                     i32.add
                                     local.tee 1
                                     i32.const 2
-                                    call 33
+                                    call 34
                                     local.get 1
                                     i32.const 65742
                                     call 30
@@ -13380,7 +13567,7 @@
                                     local.get 0
                                     i32.const 452
                                     i32.add
-                                    call 38
+                                    call 39
                                     local.get 0
                                     i32.load offset=520
                                     local.tee 5
@@ -13444,7 +13631,7 @@
                                 call 9
                                 drop
                                 local.get 1
-                                call 50
+                                call 54
                                 i32.const 0
                                 local.set 2
                                 i32.const 7
@@ -13463,7 +13650,7 @@
                             call 9
                             drop
                             local.get 1
-                            call 50
+                            call 54
                             i32.const 0
                             br 2 (;@10;)
                           end
@@ -13474,7 +13661,7 @@
                       end
                       local.set 1
                       local.get 0
-                      local.get 15
+                      local.get 14
                       i64.store offset=216
                       local.get 0
                       local.get 3
@@ -13491,7 +13678,7 @@
                     local.get 17
                     i64.store offset=104
                     local.get 0
-                    local.get 14
+                    local.get 15
                     i64.store offset=112
                     local.get 2
                     local.get 0
@@ -13500,7 +13687,7 @@
                     call 28
                     i64.const 0
                   end
-                  local.set 14
+                  local.set 15
                   local.get 0
                   i32.const 208
                   i32.add
@@ -13512,8 +13699,8 @@
                   call 9
                   drop
                   local.get 1
-                  call 50
-                  local.get 15
+                  call 54
+                  local.get 14
                   local.set 13
                   i32.const 0
                 end
@@ -13522,7 +13709,7 @@
                 local.get 16
                 i64.store offset=216
                 local.get 0
-                local.get 14
+                local.get 15
                 i64.store offset=208
                 local.get 0
                 local.get 13
@@ -13621,7 +13808,7 @@
                 end
                 local.get 1
                 local.get 2
-                call 52
+                call 55
                 unreachable
               end
               global.get 0
@@ -13668,7 +13855,7 @@
               local.get 1
               i32.const 16
               i32.add
-              call 42
+              call 46
               local.get 0
               i32.const 216
               i32.add
@@ -13693,19 +13880,19 @@
             i32.const 224
             i32.add
             i64.load
-            call 46
+            call 50
             unreachable
           end
           local.get 1
           local.get 0
           i32.const 208
           i32.add
-          call 48
+          call 52
           unreachable
         end
         local.get 2
         local.get 1
-        call 45
+        call 49
         unreachable
       end
       local.get 0
@@ -13719,23 +13906,22 @@
       call 9
       drop
       local.get 1
-      call 50
+      call 54
       i32.const 0
       local.get 0
       i32.const 456
       i32.add
-      call 48
+      call 52
       unreachable
     end
     i32.const 0
     local.get 1
-    call 52
+    call 55
     unreachable)
-
-  ;; Function 61: Deploy dispatcher (constructor)
+  ;; Function 64: Deploy dispatcher (constructor)
   ;; Decodes constructor selector
   ;; Parameters: () -> never
-  (func $dispatch_deploy (;61;) (type 4)
+  (func $dispatch_deploy (;64;) (type 5)
     (local i32 i32 i32 i32 i32 i32 i64 i64)
     global.get 0
     i32.const 304
@@ -13744,7 +13930,7 @@
     global.set 0
     block  ;; label = @1
       block  ;; label = @2
-        call 40
+        call 43
         i32.const 255
         i32.and
         i32.const 5
@@ -13776,7 +13962,7 @@
           i32.const 56
           i32.add
           local.get 5
-          call 44
+          call 48
           br_if 0 (;@3;)
           local.get 0
           i32.load offset=184
@@ -13827,10 +14013,10 @@
               i64.const 1
               i64.const 0
               i32.const 10
-              call 62
+              call 65
               local.get 5
-              call 50
-              call 47
+              call 54
+              call 51
               unreachable
             end
             local.get 2
@@ -13882,10 +14068,10 @@
             local.get 6
             local.get 0
             i32.load offset=12
-            call 62
+            call 65
             local.get 1
-            call 50
-            call 47
+            call 54
+            call 51
             unreachable
           end
           local.get 2
@@ -13938,14 +14124,14 @@
           i32.const 184
           i32.add
           local.get 2
-          call 34
+          call 35
           local.get 0
           i32.load8_u offset=184
           i32.const 1
           i32.ne
           br_if 2 (;@1;)
         end
-        call 49
+        call 53
       end
       unreachable
     end
@@ -13983,7 +14169,7 @@
     local.get 0
     i32.const 112
     i32.add
-    call 39
+    call 42
     local.get 0
     i32.const 88
     i32.add
@@ -14047,19 +14233,19 @@
     call 9
     drop
     local.get 1
-    call 50
-    call 47
+    call 54
+    call 51
     unreachable)
 
-  ;; Function 62: Initialize contract state
+  ;; Function 65: Initialize contract state
   ;; Sets up initial contract storage
   ;; Parameters: (state_ptr, ed_low, ed_high, max_locks) -> void
-  (func $initialize_contract_state (;62;) (type 16) (param i32 i64 i64 i32)
+  (func $initialize_contract_state (;65;) (type 16) (param i32 i64 i64 i32)
     ;; Get caller as owner
     local.get 0
     i32.const 48
     i32.add
-    call 39
+    call 42
     
     ;; Store parameters
     local.get 0
@@ -14093,10 +14279,10 @@
     local.get 3
     i32.store offset=80)
 
-  ;; Function 63: Check deposit feasibility
+  ;; Function 66: Check deposit feasibility
   ;; Validates deposit operation
   ;; Parameters: (config_ptr, account_ptr, new_balance_ptr) -> result
-  (func $check_deposit_feasibility (;63;) (type 2) (param i32 i32 i32) (result i32)
+  (func $check_deposit_feasibility (;66;) (type 2) (param i32 i32 i32) (result i32)
     (local i32 i32 i32 i32 i64 i64 i64 i64)
     global.get 0
     i32.const 80
@@ -14126,7 +14312,7 @@
             i32.const 85
             i32.add
             local.tee 0
-            call 42
+            call 46
             local.get 7
             local.get 3
             i64.load
@@ -14220,7 +14406,7 @@
           i32.add
           local.tee 1
           i32.const 2
-          call 33
+          call 34
           local.get 1
           i32.const 65643
           call 30
@@ -14232,7 +14418,7 @@
           local.get 3
           i32.const -64
           i32.sub
-          call 38
+          call 39
           local.get 3
           i32.load offset=72
           local.tee 4
@@ -14378,22 +14564,22 @@
       i32.add
       global.set 0
       local.get 0
-      return         ;; Return success by default
+      return
     end
     unreachable)
 
-  ;; Function 64: Allocate memory with alignment
+  ;; Function 67: Allocate memory with alignment
   ;; Low-level allocation wrapper
   ;; Parameters: (result_ptr, size) -> void
-  (func $alloc_aligned (;64;) (type 0) (param i32 i32)
+  (func $alloc_aligned (;67;) (type 0) (param i32 i32)
     (local i32)
     local.get 1
-    if (result i32)
+    if (result i32)  ;; label = @1
       i32.const 82664
       i32.load8_u
       drop
       local.get 1
-      call 65
+      call 68
     else
       i32.const 8
     end
@@ -14406,19 +14592,19 @@
     local.get 2
     i32.store)
 
-  ;; Function 65: Core allocation function
+  ;; Function 68: Core allocation function
   ;; Bump allocator implementation
   ;; Parameters: (size) -> ptr
-  (func $alloc (;65;) (type 6) (param i32) (result i32)
+  (func $alloc (;68;) (type 6) (param i32) (result i32)
     (local i32 i32)
     
-    block (result i32)
+    block (result i32)  ;; label = @1
       i32.const 66268
       i32.load8_u
-      if
+      if  ;; label = @2
         i32.const 66272
         i32.load
-        br 1
+        br 1 (;@1;)
       end
       
       memory.size
@@ -14438,8 +14624,8 @@
     end
     local.set 1
     
-    block
-      block (result i32)
+    block  ;; label = @1
+      block (result i32)  ;; label = @2
         i32.const 0
         local.get 1
         i32.const 7
@@ -14452,14 +14638,14 @@
         local.tee 2
         local.get 1
         i32.lt_u
-        br_if 0
+        br_if 0 (;@2;)
         drop
         
         i32.const 66276
         i32.load
         local.get 2
         i32.lt_u
-        if
+        if  ;; label = @3
           local.get 0
           i32.const 65535
           i32.add
@@ -14470,7 +14656,7 @@
           local.tee 1
           i32.const -1
           i32.eq
-          br_if 2
+          br_if 2 (;@1;)
           
           local.get 1
           i32.const 16
@@ -14483,7 +14669,7 @@
           local.tee 2
           local.get 1
           i32.lt_u
-          br_if 2
+          br_if 2 (;@1;)
           
           i32.const 66276
           local.get 2
@@ -14496,7 +14682,7 @@
           local.tee 2
           local.get 1
           i32.lt_u
-          br_if 1
+          br_if 1 (;@2;)
           drop
         end
         
@@ -14512,13 +14698,13 @@
   ;; ============================================================================
   ;; EXPORTS AND MODULE METADATA
   ;; ============================================================================
-
+  
   (global (;0;) (mut i32) (i32.const 65536))
   (global (;1;) i32 (i32.const 82672))
   (global (;2;) i32 (i32.const 82665))
   
-  (export "call" (func $dispatch_call))
-  (export "deploy" (func $dispatch_deploy))
+  (export "call" (func 63))
+  (export "deploy" (func 64))
   
   ;; ============================================================================
   ;; STATIC DATA SECTION
