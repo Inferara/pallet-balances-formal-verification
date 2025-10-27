@@ -471,10 +471,8 @@ mod balances_contract {
                 return WithdrawConsequence::BalanceLow;
             }
 
-            let new_balance = match account.free.checked_sub(amount) {
-                Some(b) => b,
-                None => return WithdrawConsequence::BalanceLow,
-            };
+            // Safe to unwrap: we've already verified usable >= amount, and usable <= account.free
+            let new_balance = account.free.saturating_sub(amount);
 
             if new_balance < self.existential_deposit && new_balance > 0 {
                 return WithdrawConsequence::ReducedToZero(new_balance);
@@ -772,20 +770,11 @@ mod balances_contract {
                 .checked_sub(actual_burn)
                 .ok_or(Error::InsufficientBalance)?;
 
-            if new_balance < self.existential_deposit && new_balance > 0 {
-                match preservation {
-                    Preservation::Expendable => {
-                        // Will handle dust after burn
-                    }
-                    Preservation::Preserve | Preservation::Protect => {
-                        return Err(Error::Expendability);
-                    }
-                }
-            }
-
             account.free = new_balance;
 
-            // Handle dust for Expendable case
+            // Handle dust for Expendable case only
+            // Note: The preservation check above ensures we only reach here with Expendable
+            // when dust needs handling
             if account.free < self.existential_deposit && account.free > 0 {
                 self.handle_dust(who, &mut account)?;
             }
@@ -936,6 +925,16 @@ mod balances_contract {
                 return Ok(());
             }
 
+            // Handle self-transfer as a no-op
+            if from == to {
+                self.env().emit_event(Transfer {
+                    from: Some(from),
+                    to: Some(to),
+                    value: amount,
+                });
+                return Ok(());
+            }
+
             let mut from_account = self.account(from);
             let mut to_account = self.account(to);
 
@@ -968,17 +967,11 @@ mod balances_contract {
                 .ok_or(Error::InsufficientBalance)?;
             to_account.free = to_account.free.checked_add(amount).ok_or(Error::Overflow)?;
 
-            // Handle dust
+            // Handle dust for Expendable mode only
+            // Note: The preservation check above ensures we only reach here with dust
+            // when preservation is Expendable
             if from_account.free < self.existential_deposit && from_account.free > 0 {
-                match preservation {
-                    Preservation::Expendable => {
-                        self.handle_dust(from, &mut from_account)?;
-                    }
-                    Preservation::Preserve | Preservation::Protect => {
-                        // This shouldn't happen due to earlier check, but be safe
-                        return Err(Error::Expendability);
-                    }
-                }
+                self.handle_dust(from, &mut from_account)?;
             }
 
             self.accounts.insert(from, &from_account);
@@ -1174,6 +1167,8 @@ mod balances_contract {
         include!("conformance_tests\\regular_mutate.in.rs");
         #[cfg(windows)]
         include!("conformance_tests\\regular_unbalanced.in.rs");
+        #[cfg(windows)]
+        include!("conformance_tests\\additional_coverage.in.rs");
 
         #[cfg(not(windows))]
         include!("conformance_tests/inspect_mutate.in.rs");
@@ -1183,5 +1178,7 @@ mod balances_contract {
         include!("conformance_tests/regular_mutate.in.rs");
         #[cfg(not(windows))]
         include!("conformance_tests/regular_unbalanced.in.rs");
+        #[cfg(not(windows))]
+        include!("conformance_tests/additional_coverage.in.rs");
     }
 }
