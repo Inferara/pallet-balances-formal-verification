@@ -5,7 +5,6 @@
   - [Methodology definition](#methodology-definition)
   - [Methodology execution](#methodology-execution)
   - [Reproducibility guide](#reproducibility-guide)
-    - [WASM binary compilation artifacts](#wasm-binary-compilation-artifacts)
     - [Textual description of fungible traits specification: public functions, involved in implementation of traits](#textual-description-of-fungible-traits-specification-public-functions-involved-in-implementation-of-traits)
   - [Analysis of `balances_contract` Disassembly Results and Verification Prospects](#analysis-of-balances_contract-disassembly-results-and-verification-prospects)
     - [1. Structural Observations](#1-structural-observations)
@@ -13,14 +12,16 @@
     - [3. Balance Operation Verification Strategy](#3-balance-operation-verification-strategy)
     - [4. Concrete Verification Challenges in the Annotated Code](#4-concrete-verification-challenges-in-the-annotated-code)
   - [Roadmap for Incremental Verification](#roadmap-for-incremental-verification)
+    - [Foundation Phase (Infrastructure Axiomatization)](#foundation-phase-infrastructure-axiomatization)
+    - [Business Logic Phase (Functional Correctness)](#business-logic-phase-functional-correctness)
+    - [Integration Phase](#integration-phase)
     - [Expected Outcomes and Limitations](#expected-outcomes-and-limitations)
     - [Contract Infrastructure reasoning applicability comparison with the whole Polkadot runtime](#contract-infrastructure-reasoning-applicability-comparison-with-the-whole-polkadot-runtime)
   - [Conclusion](#conclusion)
-  - [References](#references)
 
 ## Introduction
 
-In the crypto-financial industry, every bug that goes undetected before deployment can have catastrophic financial consequences. This is especially acute for systems that allow third-party developers to upload and execute arbitrary contracts on-chain, as this creates two distinct classes of threats. On one hand, the necessity of providing numerous users with an isolated environment for Turing-complete computations inevitably creates an extensive attack surface against their shared infrastructure. On the other hand, even without malicious intent from contract developers, algorithmic errors in business logic implementation or incorrect use of infrastructure primitives can allow third parties to cause financial harm to users who have entrusted their assets to the contract. While platform developers bear no direct responsibility for such situations, it's clear that the tools and interfaces they provide for contract creation greatly influence how easily reliable algorithms can be implemented with them.
+In the crypto-financial industry, every bug that goes undetected before deployment can have catastrophic financial consequences. This is especially acute for systems that allow third-party developers to upload and execute arbitrary contracts on-chain, as this creates two distinct classes of threats. First, the necessity of providing numerous users with an isolated environment for Turing-complete computations inevitably creates an extensive attack surface against their shared infrastructure. Second, even without malicious intent from contract developers, algorithmic errors in business logic implementation or incorrect use of infrastructure primitives can allow third parties to cause financial harm to users who have entrusted their assets to the contract. While platform developers bear no direct responsibility for such situations, it's clear that the tools and interfaces they provide for contract creation greatly influence how easily reliable algorithms can be implemented with them.
 
 In more established engineering disciplines that acutely face the cost of bugs - such as microcontroller programming for failure-critical tasks (medicine, chemical/nuclear industry, aviation, military applications, etc.) - formal verification methods are widely used, enabling reliability levels unattainable through paradigms familiar to typical programmers. Unfortunately, directly transferring this experience to the relatively young crypto-finance sphere is complicated by several objective circumstances. At first glance, it might seem the central problem is the enormous instrumental distance - the "reliable" programming industry universally employs highly specialized solutions optimized over decades for use in closed ecosystems, whereas the crypto-financial industry relies on massive open-source infrastructure that until recently had no acute need for radical reliability solutions.
 
@@ -34,9 +35,9 @@ Since the primary development language for Polkadot is Rust, we must first say a
 
 The first of these paths, for meaningful application, would unfortunately require a radical revision of workflows, since complex systems can be adequately approximated by a pseudocode description only when such a description is a central element of project documentation and is finalized before the first line of actual code is written. In this case, the programmer engaged in translating such a formally specified reference with proven properties into code executable on the target platform needs only to ensure that real instructions comply with local, clearly defined rules in the specification - global reliability is ensured by the proven pseudocode reference. Attempting to reconstruct such a formal description for a project already in active development post-factum makes little sense, since it's impossible to truly verify that the pseudocode retelling of an already implemented algorithm doesn't abstract away, in addition to unimportant implementation details, potentially non-local errors already contained in it.
 
-Progress on the second path, in theory, could yield positive effects without revolutions, since the object of specification and verification here is actually executing assembly code, whose semantics for popular platforms has a strict formal description - for WebAssembly and RISC-V, for example, logical mechanizations are actively developing in Rocq and Lean respectively. However, in practice this strategy is fraught with several quite labor-intensive problems. As our encounter with the internal structure of Polkadot's on-chain runtime showed, when compiling a sufficiently complex Rust project into a monolithic blob, it becomes practically impossible to isolate its individual subsystems for formal description. Attempts to single out for close examination only the assembly functions containing the business logic of some module hopelessly bog down in its literally line-by-line interleaving with elements of non-trivial infrastructure automatically generated both by FRAME's own macros and by Rust compiler internals.
+Progress on the second path, in theory, could yield positive effects without revolutions, since the object of specification and verification here is actually executing assembly code, whose semantics for popular platforms has a strict formal description - for WebAssembly and RISC-V, for example, logical mechanizations are actively developing in Rocq and Lean respectively. However, in practice this strategy is fraught with several quite labor-intensive problems. As our encounter with the internal structure of Polkadot's on-chain runtime showed, when compiling a sufficiently complex Rust project into a monolithic blob, it becomes practically impossible to isolate its individual subsystems for formal description. We attempted to isolate only the assembly functions containing a module's business logic for close examination. However, these attempts became hopelessly bogged down. This was due to the code being interleaved, line-by-line, with non-trivial infrastructure automatically generated by both FRAME's macros and the Rust compiler's internals.
 
-In such a situation, no matter how we delineate the boundaries of the subsystem whose properties are to be formalized, inside will be a significant volume (exceeding the main code by two times or more) of code having no direct relation to the core business-logic procedures that constitute the essence of `pallet_balances`. Worse still, the boundary drawn inside a monolithic architecture module won't actually allow abstracting from any details of its internal structure even when formulating the specification, let alone proving the properties fixed in it. Given that the number of instructions in the disassembled Polkadot runtime listing is literally measured in millions, and most of them constitute a single infrastructure permeating every module function, for formal verification of `pallet_balances` business-logic properties in isolation from the surrounding context considered the only possible way to approach the problem.
+In such a situation, no matter how we delineate the boundaries of the subsystem whose properties are to be formalized, inside will be a significant volume (exceeding the main code by two times or more) of code which has no direct relation to the core business-logic procedures that constitute the essence of `pallet_balances`. Worse still, the boundary drawn inside a monolithic architecture module won't actually allow abstracting from any details of its internal structure even when formulating the specification, let alone proving the properties fixed in it. Given that the number of instructions in the disassembled Polkadot runtime listing is literally measured in millions, and most of them constitute a single infrastructure permeating every module function, for a formal verification of `pallet_balances` business-logic properties in isolation from the surrounding context is considered the only possible way to approach the problem.
 
 ## Methodology execution
 
@@ -46,7 +47,38 @@ Although this isolation method doesn't eliminate the problem of the module being
 
 ## Reproducibility guide
 
-### WASM binary compilation artifacts
+Compilation of contract into `.wasm` was performed by `cargo contract build --verifiable` toolchain in the following environment:
+
+```
+Operating System: Kubuntu 25.04
+Kernel Version: 6.14.0-33-generic (64-bit)
+Processors: 16 × AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+Memory: 14.8 GiB of RAM
+Source record of build json:
+    "hash": "0x7130f80848d2f90872da6be9fdf595c4c222b6980eabe050fae953da53f90ea0",
+    "language": "ink! 5.1.1",
+    "compiler": "rustc 1.84.0",
+    "build_info": {
+      "build_mode": "Release",
+      "cargo_contract_version": "5.0.3",
+      "rust_toolchain": "stable-x86_64-unknown-linux-gnu",
+      "wasm_opt_settings": {
+        "keep_debug_symbols": false,
+        "optimization_passes": "Z"
+      }
+    }
+```
+
+Binary was decompiled by `wasm2wat` version `1.0.36` and manually annotated. Bit-exactness of annotated module to the build atrifact was checked by comparing assembly output:
+
+```
+~/Git/pallet-balances-formal-verification/balances_contract$ wat2wasm balances_contract.wat 
+~/Git/pallet-balances-formal-verification/balances_contract$ cmp balances_contract.wasm target/ink/polkadot_balances_contract_formal_verification.wasm 
+```
+
+We have encountered some build reproducability issues, as on other machines `cargo contract build --verifiable` was producing semanticaly equal, but not bit-exact (discrepancy in order of functions in the module, and thus different indexes) artifacts. Though, such minor differences have no significant impact on the preliminary analysis of formal methods application.
+
+[WASM binary compilation artifact](../balances_contract/balances_contract.wasm)
 
 ### Textual description of fungible traits specification: public functions, involved in implementation of traits
 
@@ -54,25 +86,25 @@ The full description of the mapping of `pallet_balances` trait methods to WebAss
 
 ## Analysis of `balances_contract` Disassembly Results and Verification Prospects
 
-The annotated WebAssembly representation of `balances_contract` reveals a structure that is more tractable but still presents some challenges for formal verification. Below is the analysis of the key aspects and their implications for specification and verification efforts:
+The annotated WebAssembly representation of `balances_contract` reveals a structure that is more malleable but still presents some challenges for formal verification. Below is the analysis of the key aspects and their implications for specification and verification efforts:
 
 ### 1. Structural Observations
 
 The disassembled Wasm module exhibits a clear three-tier architecture:
 
-**Infrastructure Layer (Functions 10-27, ~30% of code)**
+**Infrastructure Layer (~30% of code)**
 - Memory management primitives (`memcpy`, `memmove`, `memset`, `memcmp`)
 - SCALE codec operations (encoding/decoding of Rust types to byte representations)
 - Panic handlers and error reporting mechanisms
 - Allocation primitives (`alloc`, `vec_reserve`, etc.)
 
-**Host Interface Layer (Functions 28-65, ~40% of code)**
+**Host Interface Layer (~40% of code)**
 - Storage operations wrapping `seal_get_storage`, `seal_set_storage`, `seal_clear_storage`
 - Event emission via `seal_deposit_event`
 - Caller identification and value transfer handling
 - Cryptographic primitives (BLAKE2-256 hashing for storage keys)
 
-**Business Logic Layer (Functions 66-104, ~30% of code)**
+**Business Logic Layer (~30% of code)**
 - Message dispatchers (`dispatch_call`, `dispatch_deploy`)
 - Balance operations (`transfer`, `mint`, `burn_from`)
 - Account state management
@@ -83,13 +115,13 @@ The disassembled Wasm module exhibits a clear three-tier architecture:
 
 **Challenge 2.1: SCALE Codec Correctness**
 
-The SCALE codec, being the serialization format for all contract state and messages, is ubiquitous throughout the code. Key functions like `encode_u128` (func 33), `encode_compact_u32` (func 31), and their decoding counterparts appear in every storage operation. To verify balance operations, we need guarantees that:
+The SCALE codec, being the serialization format for all contract state and messages, is ubiquitous throughout the code. Key functions like `encode_u128`, `encode_compact_u32`, and their decoding counterparts appear in every storage operation. To verify balance operations, we need guarantees that:
 
 - **Encoding is deterministic and injective**: `∀x, y: encode(x) = encode(y) → x = y`
 - **Decode is left-inverse to encode**: `∀x: decode(encode(x)) = Some(x)`
 - **Encoding preserves value bounds**: `∀x: 0 ≤ x < 2^128 → length(encode(x)) = 16`
 
-The current implementation uses complex bit-shifting operations (visible in the massive selector dispatch in function 73) to reconstruct multi-byte values from unaligned memory loads. Verifying these operations requires reasoning about:
+The current implementation uses complex bit-shifting operations (visible in the massive selector dispatch) to reconstruct multi-byte values from unaligned memory loads. Verifying these operations requires reasoning about:
 - Byte-level memory layout
 - Endianness guarantees (little-endian for u128)
 - Overflow behavior during bit operations
@@ -98,7 +130,7 @@ The current implementation uses complex bit-shifting operations (visible in the 
 
 **Challenge 2.2: Storage Key Generation Non-Injectivity**
 
-The mapping from `AccountId → AccountData` uses BLAKE2-256 hashing (function 37) to derive storage keys:
+The mapping from `AccountId → AccountData` uses BLAKE2-256 hashing to derive storage keys:
 ```wasm
 storage_key = BLAKE2-256(mapping_prefix || account_id)
 ```
@@ -114,7 +146,7 @@ The hash function itself is implemented in the host environment (`seal_hash_blak
 
 **Challenge 2.3: Message Dispatch Complexity**
 
-Function 73 (`dispatch_call`) is a 1000+ line implementing selector matching through deeply nested blocks. The selector matching logic uses a multi-level cascade:
+Function `dispatch_call` is a 1000+ line implementing selector matching through deeply nested blocks. The selector matching logic uses a multi-level cascade:
 1. First-level dispatch on selector byte 0 (br_table with 9 cases)
 2. Second-level subtables for specific byte ranges (e.g., `0xC8`-`0xD0`, `0xF3`-`0xFA`)
 3. Individual 4-byte exact matches for remaining selectors
@@ -132,7 +164,7 @@ The core balance operations exhibit several patterns amenable to formal specific
 
 **Pattern 3.1: Checked Arithmetic with Overflow Handling**
 
-All balance updates use explicit overflow checking (e.g., in function 70, deposit_into_account):
+All balance updates use explicit overflow checking (e.g., in function `deposit_into_account`):
 ```wasm
 local.get 0          ;; account.free (low 64)
 local.get 2          ;; amount (low 64)
@@ -151,7 +183,7 @@ checked_add(a: u128, b: u128) → Result<u128> where
 
 **Pattern 3.2: Preservation Mode Enforcement**
 
-Functions like `transfer_with_checks` (71) implement complex logic for preservation modes:
+Functions like `transfer_with_checks` implement complex logic for preservation modes:
 ```
 if preservation = Preserve then
   new_balance ≥ existential_deposit ∨ new_balance = 0
@@ -164,7 +196,7 @@ This requires verification that:
 
 **Pattern 3.3: Lock Respect During Withdrawals**
 
-Function 71 ensures transfers respect frozen balances:
+Function `transfer_with_checks` ensures transfers respect frozen balances:
 ```
 usable_balance = account.free - account.frozen
 withdraw_amount ≤ usable_balance
@@ -176,7 +208,7 @@ This must be proven for all withdrawal paths (transfer, burn, etc.).
 
 Some specific sections of the provided WAT that present verification difficulties need to be highlighted:
 
-**Challenge 4.1: Complex Control Flow in Dispatch (Function 73)**
+**Challenge 4.1: Complex Control Flow in Dispatch**
 
 The dispatch function has 68 nested blocks and a `br_table` with 35+ cases. While this is semantically equivalent to a simple switch statement, proving its correctness requires:
 - Showing that all reachable branches decode parameters correctly
@@ -205,7 +237,7 @@ This reconstructs a little-endian u128 from two overlapping unaligned i64 loads.
   (bytes[11..19] as u64) << 56 | (bytes[19..27] as u64) >> 8
 ```
 
-**Challenge 4.2: Lock Aggregation Correctness (Functions 30, 73 handler 32)**
+**Challenge 4.2: Lock Aggregation Correctness**
 
 The `set_lock` implementation searches a vector for an existing lock ID, updates it, or appends a new entry. The maximum lock amount is then recalculated:
 ```wasm
@@ -218,9 +250,9 @@ Verifying this requires:
 2. Showing that `max` computation iterates over all locks
 3. Ensuring no lock is inadvertently dropped during vector operations
 
-The vector growth logic (function 56, `vec_reserve`) must preserve all existing elements.
+The vector growth logic (function `vec_reserve`) must preserve all existing elements.
 
-**Challenge 4.3: Dust Handling Soundness (Function 76, `check_deposit_feasibility`)**
+**Challenge 4.3: Dust Handling Soundness (Function `check_deposit_feasibility`)**
 
 The dust collection mechanism (transferring sub-ED balances to `dust_trap`) must maintain total issuance:
 ```
@@ -229,29 +261,33 @@ Post: total_issuance' = Σ(account'.free) + Σ(account'.reserved)
       ∨ (dust_trap.is_none() ∧ total_issuance' = total_issuance - dust_removed)
 ```
 
-The current implementation (scattered across functions 70, 71, 76) handles dust in multiple code paths. Verification requires:
+The current implementation (scattered across several functions) handles dust in multiple code paths. Verification requires:
 - Proving all paths correctly update `total_issuance`
 - Showing no double-counting or loss of tokens
 - Verifying `DustLost` events are emitted if and only if dust is burned
 
 ## Roadmap for Incremental Verification
 
-Given the complexity, we propose **incremental formalization** rather than attempting to verify the entire contract at once:
+Given the complexity, we propose **incremental formalization** rather than attempting to verify the entire contract at once. Realistically, this endeavor can be approached in three phases:
+
+### Foundation Phase (Infrastructure Axiomatization)
 
 **Step 1: Codec Verification**
 - Prove round-trip properties for SCALE encoding/decoding of:
   - `u32`, `u64`, `u128`
-  - `Compact<u32>` (function 31)
+  - `Compact<u32>`
   - `AccountId` (32-byte array)
   - `Option<T>`, `Result<T, E>`
 - **Goal**: Proven lemma `∀x: T. decode(encode(x)) = Some(x)` for each type
 
 **Step 2: Storage Abstraction**
 - Model storage as a partial map `Storage: (Prefix × Key) ⇀ Value`
-- Prove storage operations in functions 28, 30, 52 maintain:
+- Prove storage operations maintain:
   - **Set-Get Round-trip**: `storage_set(k, v); storage_get(k) = Some(v)`
   - **Key Isolation**: `k₁ ≠ k₂ → storage_set(k₁, v₁) doesn't affect storage_get(k₂)`
 - Abstract away BLAKE2 hashing (assume collision-free)
+
+### Business Logic Phase (Functional Correctness)
 
 **Step 3: Core Balance Invariants**
 - Prove for `mint`, `burn_from`, `transfer`:
@@ -272,14 +308,18 @@ Given the complexity, we propose **incremental formalization** rather than attem
 - Show `set_lock` and `remove_lock` maintain this invariant
 - Verify that `usable_balance = free - frozen` is respected during withdrawals
 
+### Integration Phase
+
 **Step 5: End-to-End Message Safety**
-- Prove dispatch function 73 correctness:
+- Prove dispatch function correctness:
   - All 35 selectors decode parameters correctly
   - Invalid selectors return `Err` (not panic)
 - Verify panic-freedom under all valid inputs
 - Establish refinement relation between Wasm execution and high-level specification
 
 ### Expected Outcomes and Limitations
+
+**Preliminary Time Expenditure**: 2 months per phase, 6 month total
 
 **What Can Be Achieved**:
 - **High Assurance** for balance conservation, non-negativity, and overflow freedom under specified preconditions
@@ -316,5 +356,3 @@ However, **some challenges remain**:
 - Preservation mode logic is intricate with multiple interacting conditions
 
 A **phased approach** starting with infrastructure axiomatization, then core balance invariants, and finally end-to-end message safety offers the best balance between ambition and feasibility.
-
-## References
