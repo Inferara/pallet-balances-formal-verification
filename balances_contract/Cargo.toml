@@ -11,6 +11,7 @@ scale-info = { version = "2", default-features = false, features = ["derive"], o
 base64ct = { version = "=1.7.3", default-features = false }
 
 [dev-dependencies]
+home = { version = "=0.5.11" }
 ink_e2e = { version = "5" }
 
 [lib]
