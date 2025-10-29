@@ -49,6 +49,22 @@ jobs:
           name: balances_contract-${{ github.run_number }}
           path: balances_contract/target/ink/polkadot_balances_contract_formal_verification.wasm
           if-no-files-found: error
+      - name: Reorder built module
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILT="./target/ink/polkadot_balances_contract_formal_verification.wasm"
+          REORDERED="./target/ink/polkadot_balances_contract_formal_verification.reordered.wasm"
+          REORDER_SCRIPT="./reorder_wasm.sh"
+          
+          echo "Making reorder script executable..."
+          chmod +x "$REORDER_SCRIPT"
+          
+          echo "Reordering built module..."
+          "$REORDER_SCRIPT" "$BUILT" "$REORDERED" "9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,26,27,28,29,24,25,30,31,32,33,34,35,36,37,40,41,38,39,42,43,44,45,46,47,48,50,52,53,49,51,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68"
+          
+          echo "Replacing original with reordered module..."
+          mv "$REORDERED" "$BUILT"
       - name: Verify bitexactness
         shell: bash
         run: |
@@ -82,4 +98,3 @@ jobs:
             echo "ERROR: Annotated module is corrupted (binary mismatch)."
             exit 1
           fi
-
